@@ -1,6 +1,6 @@
 # :ocean: Project Vesi
 
-Vesi is what happens when you give an anime personality a high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back—all without ever touching the cloud or relying on external API's. 
+Vesi is what happens when you give an anime personality high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back all without ever touching the cloud or relying on external API's. 
 
 Tested on Python 3.11 and Windows > 10.
 

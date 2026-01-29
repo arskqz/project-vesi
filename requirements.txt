@@ -1,0 +1,15 @@
+# --- LLM Brain ---
+llama-cpp-python>=0.2.76
+
+# --- Audio Ears (STT) ---
+faster-whisper>=1.0.3
+pyaudio>=0.2.14
+wave>=0.0.2
+
+# --- Audio Voice (TTS) ---
+kokoro-onnx>=0.3.0
+onnxruntime-gpu>=1.18.0
+sounddevice>=0.4.6
+
+# --- Utilities ---
+numpy>=1.24.0,<2.0.0
