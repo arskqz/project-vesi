@@ -1,0 +1,6 @@
+logs/
+
+*.json
+*.wav
+*.bin
+*.onnx
