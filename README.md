@@ -2,7 +2,7 @@
 
 Vesi is what happens when you give an anime personality high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back all without ever touching the cloud or relying on external API's. 
 
-Tested on Python 3.11 and Windows > 10.
+Tested on Python 3.11 and Windows>10.
 
 ## :rocket: Features
 
@@ -26,7 +26,7 @@ Tested on Python 3.11 and Windows > 10.
 
 * Kokoro-ONNX (The Vocal Cords)
 
-## Showcase
+## :camera: Showcase
 
 Coming soon...
 
@@ -34,11 +34,13 @@ Coming soon...
 
 1. Clone this repo.
 
-2. Install packages: ```pip install -r requirements.txt```
+2. Install Python 3.11. 
 
-3. GPU boost: If you have an NVIDIA card, grab CUDA 12.4 - 12.6 and FFmpeg to make Vesi lightning fast.
+3. Install packages: ```pip install -r requirements.txt```
 
-4. Run main.py: ```pyhton main.py```
+4. GPU boost: If you have an NVIDIA card, grab CUDA 12.4 - 12.6 and FFmpeg to make Vesi lightning fast.
+
+5. Run main.py: ```pyhton main.py```
 
 ⚠️ Warning: This isn't a "one-click" install. It’s for the tinkerers who aren't afraid to dive into dependency logs and solve a few puzzles. 
 
@@ -51,6 +53,14 @@ Coming soon...
 
 * 🌐 Web UI: Moving out of the terminal and into a sleek browser interface.
 
+
+## :mag_right: Technical Challenges & Solutions
+
+* The VRAM Tightrope: One of the biggest hurdles was managing the memory budget of a high-performance LLM alongside a GPU-intensive TTS. I optimized the system by utilizing **4-bit GGUF quantization** for the Llama model and dynamically offloading specific layers to system RAM, ensuring enough VRAM remained for real-time voice synthesis. With this optimization responses even with voice mode are almost instant.
+
+* Breaking the Dependency Loop: I successfully navigated a "**dependency hell**" scenario where the original TTS library was unmaintained and conflicting with modern Python 3.11 environments. I solved this by surgically patching library imports and pivoting to a community-maintained ONNX-based architecture for better stability and performance. In the future I am Planning to train my own audio model.
+
+
 ## :clap: Credits
 
 Llama for model -> https://github.com/ggml-org/llama.cpp
@@ -61,14 +71,8 @@ STT Faster-Whisper -> https://github.com/SYSTRAN/faster-whisper
 
 TTS Kokoro -> https://github.com/thewh1teagle/kokoro-onnx
 
-Inspiration with project and vtube model -> https://www.youtube.com/@JustRayen
+Inspiration for the project and vtube model -> https://www.youtube.com/@JustRayen
 
-
-## Technical Challenges & Solutions
-
-* The VRAM Tightrope: One of the biggest hurdles was managing the memory budget of a high-performance LLM alongside a GPU-intensive TTS. I optimized the system by utilizing **4-bit GGUF quantization** for the Llama model and dynamically offloading specific layers to system RAM, ensuring enough VRAM remained for real-time voice synthesis.
-
-* Breaking the Dependency Loop: I successfully navigated a "dependency **hell**" scenario where the original TTS library was unmaintained and conflicting with modern Python 3.11 environments. I solved this by surgically patching library imports and pivoting to a community-maintained ONNX-based architecture for better stability and performance.
 
 ## License
 
