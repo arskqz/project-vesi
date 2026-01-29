@@ -40,7 +40,7 @@ Coming soon...
 
 4. GPU boost: If you have an NVIDIA card, grab CUDA 12.4 - 12.6 and FFmpeg to make Vesi lightning fast.
 
-5. Run main.py: ```pyhton main.py```
+5. Run main.py: ```python main.py```
 
 ⚠️ Warning: This isn't a "one-click" install. It’s for the tinkerers who aren't afraid to dive into dependency logs and solve a few puzzles. 
 
