@@ -1,8 +1,10 @@
+![Vesi_temp](img/vesi-temp.jpeg)
+
 # :ocean: Project Vesi
 
 Vesi is what happens when you give an anime personality high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back all without ever touching the cloud or relying on external API's. 
 
-Tested on Python 3.11 and Windows>10.
+Tested on Python 3.11 and Windows > 10.
 
 ## :rocket: Features
 
@@ -14,7 +16,7 @@ Tested on Python 3.11 and Windows>10.
 
 * :speech_balloon: **Clear voice**: Uses ```Kokoro-82M``` for loud and clear human-like speech.
 
-* :loop: **Hybrid input**: Switch between speaking and keyboard whenever you feel like it. 
+* :loop: **Hybrid input**: Switch between speaking and keyboard on the fly using threading. 
 
 ## :hammer: Tech Stack
 
@@ -28,7 +30,8 @@ Tested on Python 3.11 and Windows>10.
 
 ## :camera: Showcase
 
-Coming soon...
+
+DEMO VIDEO COMING SOON.
 
 ## :zap: Quick Start 
 
@@ -38,18 +41,16 @@ Coming soon...
 
 3. Install packages: ```pip install -r requirements.txt```
 
-4. GPU boost: If you have an NVIDIA card, grab CUDA 12.4 - 12.6 and FFmpeg to make Vesi lightning fast.
+4. GPU boost: If you have an NVIDIA card, grab CUDA 12.4 - 12.6 and FFmpeg. To enable GPU acceleration.
 
 5. Run main.py: ```python main.py```
 
-⚠️ Warning: This isn't a "one-click" install. It’s for the tinkerers who aren't afraid to dive into dependency logs and solve a few puzzles. 
+⚠️ Warning: This isn't a "one-click" install. You are going to encounter many errors. Good luck
 
 
 ## 🗺️ TODO
 
-* 🎬 Live Avatar: Connecting to VSeeFace or similar so Vesi can lip-sync and have some fun animations.
-
-* 🎙️ Voice Evolution: Exploring GPT-SoVITS for even more emotional range.
+* 🎙️ Voice Evolution: Custom voice with Kokoro or somethind different.
 
 * 🌐 Web UI: Moving out of the terminal and into a sleek browser interface.
 
@@ -63,7 +64,7 @@ Coming soon...
 
 ## :clap: Credits
 
-Llama for model -> https://github.com/ggml-org/llama.cpp
+Llama for model and training -> https://github.com/ggml-org/llama.cpp
 
 Model used -> https://huggingface.co/TheBloke/Ana-v1-m7-GGUF
 
