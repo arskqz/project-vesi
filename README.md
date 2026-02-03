@@ -37,6 +37,7 @@ No front end. But back end about 90 % done.
 I'm gonna do a full video once im happy with the project.
 
 
+## :zap: Quick Install
 
 1. Clone this repo.
 
