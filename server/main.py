@@ -284,7 +284,7 @@ while True:
         vesi_anchor = {"role": "system", "content": "[VESI MODE: Stay smug, tsundere, and quirky. Use 'baka'.]"}
         message_to_vesi = safe_history + [vesi_anchor]
 
-        # 3. LLM Completion
+        # LLM Settings
         completion = llm.create_chat_completion(
             messages=message_to_vesi,
             max_tokens=300,
@@ -295,7 +295,6 @@ while True:
         )
 
         full_response = ""
-        print(f"\n[User]: {user_input}")
         print("Vesi is thinking...", end="\r")
 
         for chunk in completion:
