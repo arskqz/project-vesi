@@ -30,10 +30,13 @@ Tested on Python 3.11 and Windows > 10.
 
 ## :camera: Showcase
 
+[DEMO video](https://youtu.be/oGykuE8WtAs "DEMO video")
 
-DEMO VIDEO COMING SOON.
+No front end. But back end about 90 % done. 
 
-## :zap: Quick Start 
+I'm gonna do a full video once im happy with the project.
+
+
 
 1. Clone this repo.
 
