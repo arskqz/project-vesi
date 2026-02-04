@@ -38,17 +38,21 @@
 
         <div class="p-8 bg-gradient-to-t from-black/90 to-transparent">
             <div class="max-w-3xl mx-auto flex gap-4 pointer-events-auto">
-                <input id="chat-input" type="text" 
-                       class="flex-grow bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-pink-500/50 backdrop-blur-lg transition-all"
-                       placeholder="Message Vesi...">
-                <button id="send-btn" class="bg-[#00FFFF] hover:bg-[#7DF9FF] text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-pink-500/20 active:scale-95">
-                    SEND
-                </button>
+                
+                <form id="chat-form" class="flex flex-row gap-2"> 
+                    <input type="text" id="chat-input" 
+                        placeholder="Type a message..."
+                        class="flex-grow bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-pink-500/50 backdrop-blur-lg transition-all">
+
+                        <button id="send-btn" type="submit" 
+                            class="bg-[#00FFFF] hover:bg-[#7DF9FF] text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-pink-500/20 active:scale-95">
+                            Send
+                        </button>
+                </form>
             </div>
         </div>
     </div>
 
     <script type="module" src="./src/app.js"></script>
-</body>
 </body>
 </html>

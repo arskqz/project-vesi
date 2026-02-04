@@ -1,23 +1,52 @@
 ### Imports ###
 import os
-import sys
 import json
-import threading
-import queue
 import re
-import pyaudio
 import wave
+import time
 import numpy as np
+import uvicorn
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from llama_cpp import Llama
 from faster_whisper import WhisperModel
 from kokoro_onnx import Kokoro
-import sounddevice as sd
 
-### Model and Memory path ###
+
+### Config and Paths ###
 MODEL_PATH = r"D:\models\ana-v1.gguf"
 MEMORY_PATH = "../logs/chat_log.json"
+STATIC_DIR = "static"
 
-### Memory ###
+if not os.path.exists(STATIC_DIR):
+    os.makedirs(STATIC_DIR)
+
+app = FastAPI()
+
+# Allow Frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+### Global Models ###
+llm = None
+stt_model = None
+vocal_cord = None
+vesi_mood_score = 50
+current_temp = 0.95
+history = []
+
+class ChatRequest(BaseModel):
+    message: str
+
+### Helper functions ###
 def load_memory():
     """Loads history from file or creates it if it doesn't exist."""
     if os.path.exists(MEMORY_PATH):
@@ -39,86 +68,59 @@ def load_memory():
         )
     }]
 
-### Helper functions ###
-TSUN_WORDS = {
-    # originals
-    "baka", "hmph", "stupid", "dummy",
-
-    # direct insults
-    "idiot", "moron", "dumb", "dense", "pathetic", "loser",
-    "jerk", "creep", "weirdo", "annoying", "hopeless", "ridiculous",
-    "useless", "lame", "gross", "clueless", "airhead",
-
-    # tsundere attitude
-    "tch", "hm", "huh", "whatever", "fine", "jeez", "sheesh",
-    "ugh", "eh", "meh",
-
-    # dismissive / bratty
-    "shut", "go", "away", "leave", "quit", "stop", "forget",
-    "dream", "wish", "like", "care",
-
-    # cold/embarrassed reactions
-    "embarrassing", "awkward", "weird", "pervert", "creepy",
-    "sigh", "tsk", "bother", "troublesome",
-
-    # classic anime romcom flavor
-    "perv", "dork", "nerd", "geez", "seriously", "unbelievable",
-    "ridiculous", "absurd",
-
-    # tougher/aggressive spice
-    "fight", "stare", "glare", "hurry", "move", "slow", "late",
-    "brat", "punk"
-}
-DRIFT_WORDS = {
-    # assistant identity (VERY strong signals)
-    "assistant", "ai", "model", "system",
-
-    # apologies
-    "apologize", "apologies", "regret",
-
-    # customer-support verbs
-    "assist", "assistance", "support", "provide",
-
-    # service phrasing words
-    "happy", "glad", "certainly",
-
-    # compliance / limitation speak
-    "limitation", "policy", "guidelines",
-
-    # guidance tone
-    "suggest", "recommend", "advise", "clarify", "explain",
-
-    # soft corporate empathy
-    "understand", "appreciate"
-}
-
-exit_event = threading.Event()
-message_queue = queue.Queue()
-
-def keyboard_input_worker():
-    while not exit_event.is_set():
-        try:
-            user_text = sys.stdin.readline().strip()
-            if user_text:
-                message_queue.put(user_text)
-            if user_text.lower() in "exit":
-                break
-        except EOFError:
-            break
-
-
-def voice_input_worker():
-    while not exit_event.is_set():
-        voice_text = listen_continuously()
-        if voice_text:
-            message_queue.put(f"[Voice]: {voice_text}")
-
-# TODO: Func to input 'What do you want baka!' or similar
-# to llm response while it gens next response for instant
-# response.
-
 def calculate_mood(text, current_score):
     """Calculates mood score based on response"""
+    TSUN_WORDS = {
+        # originals
+        "baka", "hmph", "stupid", "dummy",
+
+        # direct insults
+        "idiot", "moron", "dumb", "dense", "pathetic", "loser",
+        "jerk", "creep", "weirdo", "annoying", "hopeless", "ridiculous",
+        "useless", "lame", "gross", "clueless", "airhead",
+
+        # tsundere attitude
+        "tch", "hm", "huh", "whatever", "fine", "jeez", "sheesh",
+        "ugh", "eh", "meh",
+
+        # dismissive / bratty
+        "shut", "go", "away", "leave", "quit", "stop", "forget",
+        "dream", "wish", "like", "care",
+
+        # cold/embarrassed reactions
+        "embarrassing", "awkward", "weird", "pervert", "creepy",
+        "sigh", "tsk", "bother", "troublesome",
+
+        # classic anime romcom flavor
+        "perv", "dork", "nerd", "geez", "seriously", "unbelievable",
+        "ridiculous", "absurd",
+
+        # tougher/aggressive spice
+        "fight", "stare", "glare", "hurry", "move", "slow", "late",
+        "brat", "punk"
+    }
+    DRIFT_WORDS = {
+        # assistant identity (VERY strong signals)
+        "assistant", "ai", "model", "system",
+
+        # apologies
+        "apologize", "apologies", "regret",
+
+        # customer-support verbs
+        "assist", "assistance", "support", "provide",
+
+        # service phrasing words
+        "happy", "glad", "certainly",
+
+        # compliance / limitation speak
+        "limitation", "policy", "guidelines",
+
+        # guidance tone
+        "suggest", "recommend", "advise", "clarify", "explain",
+
+        # soft corporate empathy
+        "understand", "appreciate"
+    }
     score = current_score
     tokens = set(text.lower().split())
 
@@ -130,203 +132,83 @@ def calculate_mood(text, current_score):
 
     return max(0, min(100, score))
 
-def display_mood_gauge(score):
-    """Displays mood score"""
-    bar_length = 20
-    filled_length = int(bar_length * score / 100)
-    bar = "█" * filled_length + "-" * (bar_length - filled_length)
-
-    print(f"\nVESI PERSONALITY GAUGE: [{bar}] {score}%")
-    if score > 75:
-        print("STATUS: Maximum tsundere (Safe)")
-    elif score < 40:
-        print("STATUS: WARNING - Assistant Drift Detected!")
-    else:
-        print("STATUS: Stable")
-
 def save_memory(history_data):
     """Saves history to memory"""
     with open(MEMORY_PATH, "w", encoding="utf-8") as f:
         json.dump(history_data, f, indent=4)
 
-### STT ###
-# See faster-whiper docs for info here
-stt_model = WhisperModel("base", device="cuda", compute_type="float16")
+# TODO: Func to input 'What do you want baka!' or similar
+# to llm response while it gens next response for instant
+# response.
 
-CHUNK = 1024
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 16000
-SILENCE_THRESHOLD = 500  # Mic sens
-SILENCE_LIMIT = 1.5
+### Model initialization ### 
+def init_models():
+    global llm, stt_model, vocal_cord, history
+    print("--- Initializing Vesi ---")
+    # STT
+    stt_model = WhisperModel("base", device="cuda", compute_type="float16")
+    # TTS
+    # See --> README_Voices.md for info
+    vocal_cord = Kokoro("voices/kokoro-v0_19.onnx", "voices/voices-v1.0.bin")
+    # LLM
+    llm = Llama(model_path=MODEL_PATH, chat_format="chatml", n_ctx=4096, n_gpu_layers=35, verbose=False)
+    history = load_memory()
+    print("--- Vesi is Online ---")
 
-def listen_continuously():
-    p = pyaudio.PyAudio()
-    stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+### API Endpoint ###
 
-    print("\n[Vesi is listening... Speak now!]")
+@app.post("/chat")
+async def chat(request: ChatRequest):
+    global vesi_mood_score, current_temp, history
 
-    frames = []
-    silent_chunks = 0
-    audio_started = False
+    for f in os.listdir(STATIC_DIR):
+        if f.endswith(".wav"):
+            try:
+                os.remove(os.path.join(STATIC_DIR, f))
+            except:
+                pass # File might be in use by the browser
+    
+    # Add to history
+    user_input = request.message
+    history.append({"role": "user", "content": user_input})
 
-    while True:
-        data = stream.read(CHUNK)
-        frames.append(data)
-
-        amplitude = np.frombuffer(data, np.int16)
-        volume = np.abs(amplitude).mean()
-
-        if volume > SILENCE_THRESHOLD:
-            if not audio_started:
-                print("(Recording started...)")
-                audio_started = True
-            silent_chunks = 0
-        else:
-            if audio_started:
-                silent_chunks += 1
-
-        if audio_started and silent_chunks > (SILENCE_LIMIT * RATE / CHUNK):
-            break
-
-    print("(Processing speech...)")
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-
-    # Save temp wav file
-    wf = wave.open("temp_input.wav", 'wb')
-    wf.setnchannels(CHANNELS)
-    wf.setsampwidth(p.get_sample_size(FORMAT))
-    wf.setframerate(RATE)
-    wf.writeframes(b''.join(frames))
-    wf.close()
-
-    segments, _ = stt_model.transcribe(
-        "temp_input.wav",
-        beam_size=5,
-        language="en",
-        task="transcribe",
-        vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms = 500),
-        initial_prompt = "Vesi is a girl's name. Vesi, baka, hmph, smug.",
+    ### LLM 
+    completion = llm.create_chat_completion(
+        messages=history[-12:], 
+        temperature=current_temp,
+        stop=["</s>", "[INST]", "<<USER>>", "<<TSUNDERE>>", "John:", "User:", "user", "Arskaz:"]
     )
-    text = " ".join([s.text for s in segments])
-    return text.strip()
+    full_response = completion["choices"][0]["message"]["content"]
 
-### TTS Setup ### 
-# See --> README_Voices.md for info
-vocal_cord = Kokoro("voices/kokoro-v0_19.onnx", "voices/voices-v1.0.bin")
+    vesi_mood_score = calculate_mood(full_response, vesi_mood_score)
 
-# TODO: Tinker with kokoro custom voices
+    timestamp = int(time.time())
+    audio_filename = f"vesi_{timestamp}.wav"
+    audio_path = os.path.join(STATIC_DIR, audio_filename)
+    
+    # TTS
+    samples, sample_rate = vocal_cord.create(full_response, voice="af_bella", speed=1.1)
+    
+    # Save generated audio to static/
+    audio_filename = "vesi_voice.wav"
+    audio_path = os.path.join(STATIC_DIR, audio_filename)
+    with wave.open(audio_path, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes((samples * 32767).astype(np.int16).tobytes())
 
-def vesi_speak(text):
-    samples, sample_rate = vocal_cord.create(
-        text,
-        voice="af_bella",
-        speed=1.1,
-        lang="en-us"
-    )
+    history.append({"role": "assistant", "content": full_response})
+    
+    return {
+        "text": full_response,
+        "mood": vesi_mood_score,
+        "audio_url": f"http://localhost:8000/static/{audio_filename}?t={os.urandom(4).hex()}"
+    }
 
-    sd.play(samples, sample_rate)
-    sd.wait()
+def main():
+    init_models()
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
-### Model set up ###
-llm = Llama(
-    model_path=MODEL_PATH,
-    chat_format="chatml",
-    n_ctx=4096,
-    n_gpu_layers=35,
-    verbose=False
-)
-
-STOP_LIST = ["</s>", "[INST]", "<<USER>>", "<<TSUNDERE>>", "John:", "User:", "user", "Arskaz:"]
-current_temp = 0.95
-vesi_mood_score = 50
-
-### Load memory ###
-history = load_memory()
-
-### Start Threads ###
-t1 = threading.Thread(target=keyboard_input_worker, daemon=True).start()
-t2 = threading.Thread(target=voice_input_worker, daemon=True).start()
-
-print("--- Vesi is ready! Type or Speak at any time. ---")
-print("--- (Type 'exit' to quit) ---")
-
-### Main loop ###
-while True:
-    try:
-        user_input = message_queue.get(block=True, timeout=0.1)
-
-        clean_input = re.sub(r'[^\w\s]', '', user_input).strip().lower()
-
-        if "voice" in clean_input:
-            clean_input = clean_input.replace("voice", "").strip()
-
-        if clean_input == "exit":
-            print("Vesi > Very well. Goodbye, baka.")
-            display_mood_gauge(vesi_mood_score)
-
-            exit_event.set()
-            os._exit(0)
-
-        if "[Voice]:" in user_input:
-            print(f"\n{user_input}")
-
-        history.append({"role": "user", "content": user_input})
-
-        if len(history) > 13:
-            safe_history = history[0:1] + history[-12:]
-        else:
-            safe_history = history
-
-        vesi_anchor = {"role": "system", "content": "[VESI MODE: Stay smug, tsundere, and quirky. Use 'baka'.]"}
-        message_to_vesi = safe_history + [vesi_anchor]
-
-        # LLM Settings
-        completion = llm.create_chat_completion(
-            messages=message_to_vesi,
-            max_tokens=300,
-            temperature=current_temp,
-            top_p=0.92,
-            stop=STOP_LIST,
-            stream=True
-        )
-
-        full_response = ""
-        print("Vesi is thinking...", end="\r")
-
-        for chunk in completion:
-            if "content" in chunk["choices"][0]["delta"]:
-                token = chunk["choices"][0]["delta"]["content"]
-                if "[" in token or "<" in token:
-                    break
-                full_response += token
-                print(token, end="", flush=True)
-
-        print("\n" + "-" * 30)
-
-        vesi_mood_score = calculate_mood(full_response, vesi_mood_score)
-        display_mood_gauge(vesi_mood_score)
-
-        vesi_speak(full_response)
-
-        history.append({"role": "assistant", "content": full_response.strip()})
-        save_memory(history)
-
-        # Adjust Temp based on mod
-        if vesi_mood_score < 40:
-            current_temp = min(1.3, current_temp + 0.1)
-        elif vesi_mood_score > 70:
-            current_temp = 0.95
-
-        message_queue.task_done()
-
-    except queue.Empty:
-        continue
-    except KeyboardInterrupt:
-        exit_event.set()
-        break
-print("\n(Session Ended)")
-os._exit(0)
+if __name__ == "__main__":
+    main()
