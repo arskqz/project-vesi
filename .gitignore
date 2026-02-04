@@ -1,0 +1,11 @@
+__pycache__/
+logs/
+*.wav
+*.onnx
+*.bin
+.env
+tests.py
+
+.idea/
+node_modules/
+*.vrm

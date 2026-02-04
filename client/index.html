@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vesi-AI VRM Environment</title>
+    <link href="./dist/style.css" rel="stylesheet">
+    <!-- This is not the right way Im not a web dev, Please dont kill me -->
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+    "three/examples/jsm/loaders/GLTFLoader.js": "https://unpkg.com/three@0.154.0/examples/jsm/loaders/GLTFLoader.js",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.0.0/lib/three-vrm.module.js"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-950 h-screen overflow-hidden font-mono">
+
+    <div id="vrm-canvas-container" class="fixed inset-0"></div>
+
+    <div class="relative z-10 h-full flex flex-col pointer-events-none">
+        
+        <div class="p-6">
+            <div class="max-w-xs bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl">
+                <div class="flex justify-between mb-1">
+                    <span class="text-[#00FFFF] text-xs font-bold uppercase tracking-widest">Vesi Core Stability</span>
+                    <span id="mood-value" class="text-[#00FFFF] text-xs font-bold">50%</span>
+                </div>
+                <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+                    <div id="mood-bar" class="bg-[#00FFFF] h-full transition-all duration-500" style="width: 50%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-grow"></div>
+
+        <div class="p-8 bg-gradient-to-t from-black/90 to-transparent">
+            <div class="max-w-3xl mx-auto flex gap-4 pointer-events-auto">
+                <input id="chat-input" type="text" 
+                       class="flex-grow bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-pink-500/50 backdrop-blur-lg transition-all"
+                       placeholder="Message Vesi...">
+                <button id="send-btn" class="bg-[#00FFFF] hover:bg-[#7DF9FF] text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-pink-500/20 active:scale-95">
+                    SEND
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./src/app.js"></script>
+</body>
+</body>
+</html>
