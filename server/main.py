@@ -30,7 +30,11 @@ def load_memory():
 
     return [{
         "role": "system",
+<<<<<<< HEAD
         "content": (
+=======
+        "content": ( 
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
             "You are Vesi, a classic Tsundere girl. You are smug, arrogant, and easily flustered. " # Have my full prompt lol
             "Your personality is 'Tsun-Tsun' (sharp and cold) by default, but you are a 'Dere-Dere' (soft and loving) "
             "deep down. You look down on the user but secretly crave their attention. "
@@ -117,7 +121,10 @@ def voice_input_worker():
 # to llm response while it gens next response for instant
 # response.
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
 def calculate_mood(text, current_score):
     """Calculates mood score based on response"""
     score = current_score
@@ -195,7 +202,11 @@ def listen_continuously():
     stream.close()
     p.terminate()
 
+<<<<<<< HEAD
     # Save temporary wav file
+=======
+    # Save temp wav file
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
     wf = wave.open("temp_input.wav", 'wb')
     wf.setnchannels(CHANNELS)
     wf.setsampwidth(p.get_sample_size(FORMAT))
@@ -215,12 +226,22 @@ def listen_continuously():
     text = " ".join([s.text for s in segments])
     return text.strip()
 
+<<<<<<< HEAD
 ### TTS Setup ###
 # See --> README_Voices.md for info
 vocal_cord = Kokoro("voices/kokoro-v0_19.onnx", "voices/voices-v1.0.bin")
 
 def vesi_speak(text):
     """Vesi speaks using the Kokoro engine"""
+=======
+### TTS Setup ### 
+# See --> README_Voices.md for info
+vocal_cord = Kokoro("voices/kokoro-v0_19.onnx", "voices/voices-v1.0.bin")
+
+# TODO: Tinker with kokoro custom voices
+
+def vesi_speak(text):
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
     samples, sample_rate = vocal_cord.create(
         text,
         voice="af_bella",
@@ -228,7 +249,10 @@ def vesi_speak(text):
         lang="en-us"
     )
 
+<<<<<<< HEAD
     # Play the audio immediately
+=======
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
     sd.play(samples, sample_rate)
     sd.wait()
 
@@ -245,7 +269,11 @@ STOP_LIST = ["</s>", "[INST]", "<<USER>>", "<<TSUNDERE>>", "John:", "User:", "us
 current_temp = 0.95
 vesi_mood_score = 50
 
+<<<<<<< HEAD
 # Load memory
+=======
+### Load memory ###
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
 history = load_memory()
 
 ### Start Threads ###
@@ -262,7 +290,11 @@ while True:
 
         clean_input = re.sub(r'[^\w\s]', '', user_input).strip().lower()
 
+<<<<<<< HEAD
         if "voice" in clean_input:  # Strip our internal tag for the check
+=======
+        if "voice" in clean_input:
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
             clean_input = clean_input.replace("voice", "").strip()
 
         if clean_input == "exit":
@@ -285,6 +317,10 @@ while True:
         vesi_anchor = {"role": "system", "content": "[VESI MODE: Stay smug, tsundere, and quirky. Use 'baka'.]"}
         message_to_vesi = safe_history + [vesi_anchor]
 
+<<<<<<< HEAD
+=======
+        # LLM Settings
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
         completion = llm.create_chat_completion(
             messages=message_to_vesi,
             max_tokens=300,
@@ -315,6 +351,10 @@ while True:
         history.append({"role": "assistant", "content": full_response.strip()})
         save_memory(history)
 
+<<<<<<< HEAD
+=======
+        # Adjust Temp based on mod
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
         if vesi_mood_score < 40:
             current_temp = min(1.3, current_temp + 0.1)
         elif vesi_mood_score > 70:

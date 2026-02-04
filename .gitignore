@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 __pycache__/
 logs/
 *.wav
@@ -9,3 +10,11 @@ tests.py
 .idea/
 node_modules/
 *.vrm
+=======
+logs/
+
+*.json
+*.wav
+*.bin
+*.onnx
+>>>>>>> cf7ea92cd1d4640a21a348cd98c339b952c11eab
