@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vesi-AI VRM Environment</title>
+    <title>VesiGPT VRM</title>
     <link href="./dist/style.css" rel="stylesheet">
     <!-- This is not the right way Im not a web dev, Please dont kill me -->
     <script type="importmap">
@@ -25,7 +25,7 @@
         <div class="p-6">
             <div class="max-w-xs bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl">
                 <div class="flex justify-between mb-1">
-                    <span class="text-[#00FFFF] text-xs font-bold uppercase tracking-widest">Vesi Core Stability</span>
+                    <span class="text-[#00FFFF] text-xs font-bold uppercase tracking-widest">Vesi Tsundere Meter</span>
                     <span id="mood-value" class="text-[#00FFFF] text-xs font-bold">50%</span>
                 </div>
                 <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden">
@@ -37,21 +37,29 @@
         <div class="flex-grow"></div>
 
         <div class="p-8 bg-gradient-to-t from-black/90 to-transparent">
-            <div class="max-w-3xl mx-auto flex gap-4 pointer-events-auto">
-                
-                <form id="chat-form" class="flex flex-row gap-2"> 
-                    <input type="text" id="chat-input" 
-                        placeholder="Type a message..."
-                        class="flex-grow bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-pink-500/50 backdrop-blur-lg transition-all">
-
-                        <button id="send-btn" type="submit" 
-                            class="bg-[#00FFFF] hover:bg-[#7DF9FF] text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-pink-500/20 active:scale-95">
-                            Send
-                        </button>
-                </form>
-            </div>
-        </div>
+        <div class="max-w-3xl mx-auto pointer-events-auto">
+        
+        <form id="chat-form" class="w-full flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 backdrop-blur-lg"> 
+            
+            <button type="button" id="mic-btn" class="text-white/50 hover:text-[#00FFFF] transition-colors p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                </svg>
+            </button>
+            
+            <input type="text" id="chat-input" 
+                placeholder="Type a message..."
+                class="flex-grow bg-transparent border-none text-white placeholder-white/30 focus:outline-none px-2">
+            
+            <button id="send-btn" type="submit" 
+                class="bg-[#00FFFF] hover:bg-[#7DF9FF] text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg shadow-pink-500/20 active:scale-95">
+                Send
+            </button>
+        </form>
+        
     </div>
+    </div>
+</div>
 
     <script type="module" src="./src/app.js"></script>
 </body>

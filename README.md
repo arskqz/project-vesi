@@ -1,62 +1,97 @@
-![Vesi_temp](img/vesi-temp.jpeg)
+![Vesi_temp](img/vesi_temp.png)
 
 # :ocean: Project Vesi
+Vesi is what happens when you give an anime personality a high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back **all without ever touching the cloud or relying on external APIs.**
 
-Vesi is what happens when you give an anime personality high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back all without ever touching the cloud or relying on external API's. 
-
-Tested on Python 3.11 and Windows > 10.
+Built with Three.js, VRM, and Python. Tested on Python 3.11.14 and Windows > 10.
 
 ## :rocket: Features
 
-* :brain: **Local Brain**: Powered by ```LLama``` models. No API keys or subscriptions.
-
-* :ear: **Sharp Ears**: Uses ```Faster-Whisper``` to transcribe your voice. Fast and works well even for rally-english.
-
-* :anger: **Memory & Attitude**: Easily configurable personality and remembers conversation history. 
-
-* :speech_balloon: **Clear voice**: Uses ```Kokoro-82M``` for loud and clear human-like speech.
-
-* :loop: **Hybrid input**: Switch between speaking and keyboard on the fly using threading. 
+* :brain: **Local Brain**: Powered by `Llama` models. No API keys or subscriptions.
+* :ear: **Sharp Ears**: Uses `Faster-Whisper` to transcribe your voice. Fast and works well even for rally-english.
+* :anger: **Memory & Attitude**: Easily configurable personality and remembers conversation history. Mood system tracks emotional state.
+* :speech_balloon: **Clear Voice**: Uses `Kokoro-82M` for loud and clear human-like speech with lip sync.
+* :microphone: **Push-to-Talk**: Hold the mic button to speak, release to auto-send. Seamless voice interaction.
+* :art: **3D Avatar**: Interactive VRM character with natural idle animations, breathing, and blinking.
+* :loop: **Hybrid Input**: Switch between speaking and keyboard on the fly.
 
 ## :hammer: Tech Stack
 
+### Backend
 * Python 3.11
-
+* FastAPI (REST API)
 * Llama-cpp-python (The Brains)
-
 * Faster-Whisper (The Hearing)
-
 * Kokoro-ONNX (The Vocal Cords)
+
+### Frontend
+* Three.js (3D Rendering)
+* @pixiv/three-vrm (VRM Character Support)
+* Tailwind CSS (UI Styling)
+* Web Audio API (Lip Sync & Audio Playback)
 
 ## :camera: Showcase
 
-[DEMO video](https://youtu.be/oGykuE8WtAs "DEMO video")
+Coming very Soon...
 
-No front end. But back end about 90 % done. 
+## :wrench: Setup
 
-I'm gonna do a full video once im happy with the project.
+### 1. Clone the repo
+```bash
+git clone https://github.com/arskqz/project_vesi.git
+cd project_vesi
+```
+
+### 2. Install Python dependencies
+
+**NOTE:** You might want to use python 3.10 (Do your own research) 
+```bash
+cd server
+pip install -r requirements.txt
+```
+
+### 3. Download models
+- Place your GGUF model in `models/` (e.g., `ana-v1.gguf`)
+- Download Kokoro voices and place in `voices/`
+- Place your VRM **1.0** model in `client/models` 
+
+### 4. Run the backend
+```bash
+python main.py
+```
+
+### 5. Run the frontend
+```bash
+cd ../client
+python -m http.server 5500
+```
+
+### 6. Open in browser
+Navigate to `http://127.0.0.1:5500`
 
 
-## :zap: Quick Install
+⚠️ Warning: This isn't a "one-click" install. You are going to encounter many errors. **Good luck!**
 
-1. Clone this repo.
+## :video_game: Usage
+* **Type**: Enter text in the input box and click Send
+* **Speak**: Press and hold the mic button, speak, then release to auto-send
+* **Watch**: Vesi responds with voice, lip sync, and mood changes
 
-2. Install Python 3.11. 
-
-3. Install packages: ```pip install -r requirements.txt```
-
-4. GPU boost: If you have an NVIDIA card, grab CUDA 12.4 - 12.6 and FFmpeg. To enable GPU acceleration.
-
-5. Run main.py: ```python main.py```
-
-⚠️ Warning: This isn't a "one-click" install. You are going to encounter many errors. Good luck
+## :gear: Configuration
+Edit `server/main.py` to customize:
+* Model path
+* System prompt (personality) and reinforcement prompt (remeber personality)
+* Temperature settings
+* Mood calculation words based on personality (eg. "Baka" good for tsundere types.)
 
 
 ## 🗺️ TODO
 
-* 🎙️ Voice Evolution: Custom voice with Kokoro or somethind different.
+* [ ] Start script 
 
-* 🌐 Web UI: Moving out of the terminal and into a sleek browser interface.
+* [ ] Voice Evolution: Custom voice with Kokoro or something different.
+
+* [ ] More animations: Custom animations and multiple vrm model support.
 
 
 ## :mag_right: Technical Challenges & Solutions
@@ -76,15 +111,15 @@ STT Faster-Whisper -> https://github.com/SYSTRAN/faster-whisper
 
 TTS Kokoro -> https://github.com/thewh1teagle/kokoro-onnx
 
+Three JS VRM by pixiv -> https://github.com/pixiv/three-vrm
+
 Inspiration for the project and vtube model -> https://www.youtube.com/@JustRayen
 
 
-## License
+## :page_facing_up: License
 
-MIT license. 
+MIT License - do whatever you want with it.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Go make your own AI Waifu !
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+Made with love and loads of coffee.

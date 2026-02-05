@@ -4,11 +4,13 @@ import json
 import re
 import wave
 import time
+import tempfile
 import numpy as np
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import UploadFile, File
 from pydantic import BaseModel
 from llama_cpp import Llama
 from faster_whisper import WhisperModel
@@ -133,7 +135,7 @@ def calculate_mood(text, current_score):
     return max(0, min(100, score))
 
 def save_memory(history_data):
-    """Saves history to memory"""
+    """Saves history to memory json"""
     with open(MEMORY_PATH, "w", encoding="utf-8") as f:
         json.dump(history_data, f, indent=4)
 
@@ -143,19 +145,42 @@ def save_memory(history_data):
 
 ### Model initialization ### 
 def init_models():
+    """Starts all the models"""
     global llm, stt_model, vocal_cord, history
     print("--- Initializing Vesi ---")
     # STT
     stt_model = WhisperModel("base", device="cuda", compute_type="float16")
+    print("--- Faster Whisper Ready ---")
     # TTS
     # See --> README_Voices.md for info
     vocal_cord = Kokoro("voices/kokoro-v0_19.onnx", "voices/voices-v1.0.bin")
+    print("--- Kokoro Ready ---")
     # LLM
     llm = Llama(model_path=MODEL_PATH, chat_format="chatml", n_ctx=4096, n_gpu_layers=35, verbose=False)
+    print("--- LLM Ready ---")
     history = load_memory()
     print("--- Vesi is Online ---")
 
 ### API Endpoint ###
+
+@app.post("/transcribe")
+async def transcribe_audio(audio: UploadFile = File(...)):
+    """Transcribe audio to text using Faster Whisper"""
+    
+    # Save to tmp file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+        content = await audio.read()
+        temp_audio.write(content)
+        temp_path = temp_audio.name
+    
+    try:
+        segments, info = stt_model.transcribe(temp_path, beam_size=5, language="en", task="transcribe", initial_prompt = "Vesi is a girl's name. Vesi, baka, hmph, smug.")
+        text = " ".join([segment.text for segment in segments])
+        
+        return {"text": text.strip()}
+    
+    finally:
+        os.remove(temp_path)
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
@@ -166,7 +191,7 @@ async def chat(request: ChatRequest):
             try:
                 os.remove(os.path.join(STATIC_DIR, f))
             except:
-                pass # File might be in use by the browser
+                pass
     
     # Add to history
     user_input = request.message
@@ -187,7 +212,7 @@ async def chat(request: ChatRequest):
     audio_path = os.path.join(STATIC_DIR, audio_filename)
     
     # TTS
-    samples, sample_rate = vocal_cord.create(full_response, voice="af_bella", speed=1.1)
+    samples, sample_rate = vocal_cord.create(full_response, voice="af_bella", speed=1.25, lang="en-us")
     
     # Save generated audio to static/
     audio_filename = "vesi_voice.wav"

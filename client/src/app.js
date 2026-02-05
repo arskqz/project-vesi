@@ -5,9 +5,9 @@ import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 // Scene 
 const scene = new THREE.Scene();
 
-// Camera 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 1.3, 2.5); 
+// Camera (set to about chest height)
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.0, 0.8); 
 
 // Renderer 
 const container = document.getElementById('vrm-canvas-container');
@@ -21,14 +21,25 @@ container.appendChild(renderer.domElement);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
-const spotLight = new THREE.SpotLight(0xffffff, 1.5);
-spotLight.position.set(5, 5, 5);
-scene.add(spotLight);
+// Key light (main light)
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.2);
+keyLight.position.set(2, 3, 3);
+scene.add(keyLight);
+
+// Fill light (soft filler)
+const fillLight = new THREE.DirectionalLight(0xaaccff, 0.2);
+fillLight.position.set(-2, 2, 2);
+scene.add(fillLight);
+
+// Rim light (behind)
+const rimLight = new THREE.DirectionalLight(0xff88cc, 0.3); 
+rimLight.position.set(0, 2, -3);
+scene.add(rimLight);
 
 const listener = new THREE.AudioListener();
 camera.add(listener);
 const vesiSound = new THREE.Audio(listener);
-const analyser = new THREE.AudioAnalyser(vesiSound, 256); // Brain to 'read' the sound
+const analyser = new THREE.AudioAnalyser(vesiSound, 256);
 
 // Load VRM
 let currentVrm = null;
@@ -42,6 +53,48 @@ loader.load(
         scene.add(vrm.scene);
         currentVrm = vrm;
         vrm.scene.rotation.y = Math.PI;
+
+         if (vrm.humanoid) {
+            vrm.humanoid.resetNormalizedPose();
+            
+            const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+            const leftLowerArm = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
+            const leftHand = vrm.humanoid.getNormalizedBoneNode('leftHand');
+            
+            if (leftUpperArm) {
+                leftUpperArm.rotation.x = 0.6;   // Rotate forward toward body
+                leftUpperArm.rotation.y = 0.1;
+                leftUpperArm.rotation.z = 1.1;   // Bring arm down
+            }
+            if (leftLowerArm) {
+                leftLowerArm.rotation.x = -0.75; // bend elboe outward
+                leftLowerArm.rotation.y = 0;     // Bend elbow inward
+                leftLowerArm.rotation.z = 1;     // Additional bend
+            }
+            if (leftHand) {
+                leftHand.rotation.z = 0.2;
+                leftHand.rotation.x = 0;         
+            }
+            
+            const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+            const rightLowerArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+            const rightHand = vrm.humanoid.getNormalizedBoneNode('rightHand');
+            
+            if (rightUpperArm) {
+                rightUpperArm.rotation.x = 0.6;    // Rotate forward toward body
+                rightUpperArm.rotation.y = -0.1;
+                rightUpperArm.rotation.z = -1.1;   // Bring arm down
+            }
+            if (rightLowerArm) {
+                rightLowerArm.rotation.x = -0.75;  // Bend elbow outward
+                rightLowerArm.rotation.y = 0;      // Bend elbow inward
+                rightLowerArm.rotation.z = -1;     // Additional bend
+            }
+            if (rightHand) {
+                rightHand.rotation.z = -0.2;
+                rightHand.rotation.x = -2;         
+            }
+        }
 
         const ls = document.getElementById('loading-screen');
         if (ls) {
@@ -64,18 +117,44 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// TODO fix this
 const clock = new THREE.Clock();
+let idleTime = 0;
+
 function animate() {
     requestAnimationFrame(animate);
     const deltaTime = clock.getDelta();
+    idleTime += deltaTime;
     
     if (currentVrm) {
+        // Lip flap anim
         const volume = analyser.getAverageFrequency();
         const mouthOpen = Math.min(volume / 40, 1.0);
-
-        // animation
         currentVrm.expressionManager.setValue('aa', mouthOpen);
+        
+        // full idle anim
+        
+        // chest / body move up and down
+        const breathCycle = Math.sin(idleTime * 1.5) * 0.015; 
+        currentVrm.scene.position.y = breathCycle;
+        
+        // Sway left to right
+        const swayCycle = Math.sin(idleTime * 0.4) * 0.02; 
+        currentVrm.scene.rotation.z = swayCycle;
+        
+        // Head tilt
+        const headBone = currentVrm.humanoid.getNormalizedBoneNode('head');
+        if (headBone) {
+            const headTilt = Math.sin(idleTime * 0.6) * 0.05;
+            headBone.rotation.z = headTilt;
+        }
+        
+        // Random blink
+        if (Math.random() < 0.002) {
+            currentVrm.expressionManager.setValue('blink', 1.0);
+            setTimeout(() => {
+                currentVrm.expressionManager.setValue('blink', 0);
+            }, 150);
+        }
         
         currentVrm.update(deltaTime);
     }
@@ -96,7 +175,7 @@ async function sendMessage(event) {
 
     // 127 to local
     try {
-        const response = await fetch('http://localhost:8000/chat', {
+        const response = await fetch('http://127.0.0.1:8000/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: text })
@@ -104,6 +183,8 @@ async function sendMessage(event) {
 
         const data = await response.json();
         console.log("Data received:", data);
+
+        updateMoodBar(data.mood);
 
         if (typeof vesiSound !== 'undefined' && data.audio_url) {
             const audioLoader = new THREE.AudioLoader();
@@ -121,35 +202,103 @@ async function sendMessage(event) {
     }
 }
 
-// 4. Link to UI
+// vesi_mood_scrore
+function updateMoodBar(moodScore) {
+    const moodBar = document.getElementById('mood-bar');
+    const moodValue = document.getElementById('mood-value');
+    
+    moodBar.style.width = moodScore + '%';
+    moodValue.textContent = moodScore + '%';
+}
+
+// Link to UI
 const chatForm = document.getElementById('chat-form');
 
 chatForm.addEventListener('submit', function(e) {
     e.preventDefault();
     e.stopImmediatePropagation();
-    console.log("Reload blocked. Calling sendMessage...");
+    console.log("Calling sendMessage...");
     sendMessage(e);
     return false;
 });
 
-// debug
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
 
-// console.log("=== SCRIPT LOADED ===");
-// console.log("Form element:", document.getElementById('chat-form'));
-// console.log("Send button:", document.getElementById('send-btn'));
-// console.log("Chat input:", document.getElementById('chat-input'));
+document.getElementById('mic-btn').addEventListener('mousedown', async function() {
+    if (isRecording) return;
+    
+    const micBtn = this;
+    isRecording = true;
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        
+        mediaRecorder.ondataavailable = (event) => {
+            audioChunks.push(event.data);
+        };
+        
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            audioChunks = [];
+            
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+            
+            try {
+                const response = await fetch('http://127.0.0.1:8000/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                const transcribedText = data.text;
+                
+                document.getElementById('chat-input').value = transcribedText;
+                
+                // Auto send timeout ms
+                setTimeout(() => {
+                    sendMessage();
+                }, 1000);
+                
+            } catch (err) {
+                console.error("Transcription error:", err);
+            }
+            
+            isRecording = false;
+        };
+        
+        mediaRecorder.start();
+        micBtn.classList.add('text-red-500');
+        console.log("Recording...");
+        
+    } catch (err) {
+        console.error("Mic access error:", err);
+        isRecording = false;
+    }
+});
 
-// const form = document.getElementById('chat-form');
-// if (form) {
-//     console.log("Attaching listener to form...");
-//     form.addEventListener('submit', function(e) {
-//         console.log("🚨 FORM SUBMIT EVENT FIRED!");
-//         e.preventDefault();
-//         e.stopPropagation();
-//         sendMessage(e);
-//         return false;
-//     }, {capture:true});
-//     console.log("Listener attached successfully");
-// } else {
-//     console.error("❌ FORM NOT FOUND!");
-// }
+document.getElementById('mic-btn').addEventListener('mouseup', function() {
+    if (!isRecording || !mediaRecorder) return;
+    
+    const micBtn = this;
+    
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    micBtn.classList.remove('text-red-500');
+    console.log("Recording stopped, transcribing...");
+});
+
+// fat finger protection
+document.getElementById('mic-btn').addEventListener('mouseleave', function() {
+    if (!isRecording || !mediaRecorder) return;
+    
+    const micBtn = this;
+    
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    micBtn.classList.remove('text-red-500');
+    console.log("Recording stopped, transcribing...");
+});

@@ -12,4 +12,7 @@ onnxruntime-gpu>=1.18.0
 sounddevice>=0.4.6
 
 # --- Utilities ---
-numpy>=1.24.0,<2.0.0
+numpy>=1.24.0
+uvicorn>=0.40.0
+fastapi>=0.128.0
+pydandic>=2.12.5
