@@ -32,7 +32,9 @@ Built with Three.js, VRM, and Python. Tested on Python 3.11.14 and Windows > 10.
 
 ## :camera: Showcase
 
-Coming very Soon...
+**DEMO VIDEO LIVE**
+
+* https://www.youtube.com/watch?v=i9Aj_RLnwOU
 
 ## :wrench: Setup
 

@@ -174,7 +174,13 @@ async def transcribe_audio(audio: UploadFile = File(...)):
         temp_path = temp_audio.name
     
     try:
-        segments, info = stt_model.transcribe(temp_path, beam_size=5, language="en", task="transcribe", initial_prompt = "Vesi is a girl's name. Vesi, baka, hmph, smug.")
+        segments, info = stt_model.transcribe(
+            temp_path, 
+            beam_size=5, 
+            language="en", 
+            task="transcribe", 
+            initial_prompt="Vesi is a girl's name. Vesi, baka, hmph, smug."
+        )
         text = " ".join([segment.text for segment in segments])
         
         return {"text": text.strip()}
@@ -182,10 +188,12 @@ async def transcribe_audio(audio: UploadFile = File(...)):
     finally:
         os.remove(temp_path)
 
+
 @app.post("/chat")
 async def chat(request: ChatRequest):
     global vesi_mood_score, current_temp, history
-
+    
+    # Clean up old audio files
     for f in os.listdir(STATIC_DIR):
         if f.endswith(".wav"):
             try:
@@ -193,37 +201,58 @@ async def chat(request: ChatRequest):
             except:
                 pass
     
-    # Add to history
+    # Add user message to history
     user_input = request.message
     history.append({"role": "user", "content": user_input})
-
+    
+    system_prompt = history[0] 
+    recent_history = history[-12:]  
+    
+    reinforcement_prompt = {
+        "role": "system",
+        "content": (
+            "Remember: You are Vesi, a tsundere. Stay in character. "
+            "Use short, punchy responses. Show your personality!"
+        )
+    }
+    
+    # sandwhich prompt
+    messages_to_send = [system_prompt] + recent_history + [reinforcement_prompt]
+    
     ### LLM 
     completion = llm.create_chat_completion(
-        messages=history[-12:], 
+        messages=messages_to_send, 
         temperature=current_temp,
         stop=["</s>", "[INST]", "<<USER>>", "<<TSUNDERE>>", "John:", "User:", "user", "Arskaz:"]
     )
+    
     full_response = completion["choices"][0]["message"]["content"]
-
     vesi_mood_score = calculate_mood(full_response, vesi_mood_score)
-
+    
+    # TTS
+    samples, sample_rate = vocal_cord.create(
+        full_response, 
+        voice="af_bella", 
+        speed=1.25, 
+        lang="en-us"
+    )
+    
+    # Save generated audio to static/
     timestamp = int(time.time())
     audio_filename = f"vesi_{timestamp}.wav"
     audio_path = os.path.join(STATIC_DIR, audio_filename)
     
-    # TTS
-    samples, sample_rate = vocal_cord.create(full_response, voice="af_bella", speed=1.25, lang="en-us")
-    
-    # Save generated audio to static/
-    audio_filename = "vesi_voice.wav"
-    audio_path = os.path.join(STATIC_DIR, audio_filename)
     with wave.open(audio_path, 'wb') as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
         wf.writeframes((samples * 32767).astype(np.int16).tobytes())
-
+    
+    # Add VEsi response
     history.append({"role": "assistant", "content": full_response})
+    
+    # Save memory after each exchange
+    save_memory(history)
     
     return {
         "text": full_response,
