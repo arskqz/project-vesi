@@ -58,17 +58,23 @@ pip install -r requirements.txt
 - Place your VRM **1.0** model in `client/models` 
 
 ### 4. Run the backend
+
+MAKE SURE YOU ARE IN `server/`!
+
 ```bash
 python main.py
 ```
 
-### 5. Run the frontend
+### 5. Download three.js
+- Download three.js, three VRM and Tailwind css using `npm`, `vite` or something else.
+
+### 6. Run the frontend
 ```bash
 cd ../client
 python -m http.server 5500
 ```
 
-### 6. Open in browser
+### 7. Open in browser
 Navigate to `http://127.0.0.1:5500`
 
 

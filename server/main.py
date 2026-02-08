@@ -7,6 +7,7 @@ import time
 import tempfile
 import numpy as np
 import uvicorn
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +20,7 @@ from kokoro_onnx import Kokoro
 
 ### Config and Paths ###
 MODEL_PATH = r"D:\models\ana-v1.gguf"
-MEMORY_PATH = "../logs/chat_log.json"
+MEMORY_PATH = Path("../logs/chat_log.json")
 STATIC_DIR = "static"
 
 if not os.path.exists(STATIC_DIR):
@@ -51,15 +52,16 @@ class ChatRequest(BaseModel):
 ### Helper functions ###
 def load_memory():
     """Loads history from file or creates it if it doesn't exist."""
-    if os.path.exists(MEMORY_PATH):
+    MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if MEMORY_PATH.exists():
         try:
             with open(MEMORY_PATH, "r", encoding="utf-8") as f:
-                print(f"--- Memory loaded from {MEMORY_PATH} ---")
+                print(f"--- Memory loaded from {MEMORY_PATH.resolve()} ---")
                 return json.load(f)
         except Exception as e:
-            print(f"--- Error loading memory: {e}. Starting fresh. ---")
+            print(f"--- Error: loading memory from {e}. Starting fresh ---")
 
-    return [{
+    intial_history = [{
         "role": "system",
         "content": ( 
             "You are Vesi, a classic Tsundere girl. You are smug, arrogant, and easily flustered. " # Have my full prompt lol
@@ -69,6 +71,13 @@ def load_memory():
             "RULE: Stay in character. Short, punchy sentences. Never speak for the user. No [INST] tags."
         )
     }]
+
+    with open(MEMORY_PATH, "r", encoding="utf-8") as f:
+        json.dump(intial_history, f, indent=4)
+        print(f"--- Created new memory file at: {MEMORY_PATH.resolve()} ---")
+
+    return intial_history
+        
 
 def calculate_mood(text, current_score):
     """Calculates mood score based on response"""
