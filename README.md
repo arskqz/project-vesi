@@ -53,11 +53,16 @@ pip install -r requirements.txt
 ```
 
 ### 3. Download models
-- Place your GGUF model in `models/` (e.g., `ana-v1.gguf`)
+- Place your GGUF model in `models/` (e.g., `ana-v1.gguf` or `lumimaid-v2.gguf`) It is also important to choose the right quantization for your GPU.
 - Download Kokoro voices and place in `voices/`
 - Place your VRM **1.0** model in `client/models` 
 
-### 4. Run the backend
+### 4. Add your own prompt
+- Add your own prompt to `vesi_config.example.yaml`
+- Change the file name to `vesi_config.yaml`
+- Feel free to play around with the mood system and change it to your liking. 
+
+### 5. Run the backend
 
 MAKE SURE YOU ARE IN `server/`!
 
@@ -65,16 +70,16 @@ MAKE SURE YOU ARE IN `server/`!
 python main.py
 ```
 
-### 5. Download three.js
+### 6. Download three.js
 - Download three.js, three VRM and Tailwind css using `npm`, `vite` or something else.
 
-### 6. Run the frontend
+### 7. Run the frontend
 ```bash
 cd ../client
 python -m http.server 5500
 ```
 
-### 7. Open in browser
+### 8. Open in browser
 Navigate to `http://127.0.0.1:5500`
 
 
@@ -95,16 +100,20 @@ Edit `server/main.py` to customize:
 
 ## 🗺️ TODO
 
-* [ ] Start script 
+* [ X ] Video showcase.
+
+* [ ] Memory and Prompt: faiss... 
+
+* [ ] More animations: Custom animations and multiple vrm model support.
 
 * [ ] Voice Evolution: Custom voice with Kokoro or something different.
 
-* [ ] More animations: Custom animations and multiple vrm model support.
+* [ ] Start script: If someone pesters me enough I'll do it. 
 
 
 ## :mag_right: Technical Challenges & Solutions
 
-* The VRAM Tightrope: One of the biggest hurdles was managing the memory budget of a high-performance LLM alongside a GPU-intensive TTS. I optimized the system by utilizing **4-bit GGUF quantization** for the Llama model and dynamically offloading specific layers to system RAM, ensuring enough VRAM remained for real-time voice synthesis. With this optimization responses even with voice mode are almost instant.
+* The VRAM Tightrope: One of the biggest hurdles was managing the memory budget of a high-performance LLM alongside a GPU-intensive TTS. I optimized the system by utilizing **6-bit GGUF quantization** for the Llama model and dynamically offloading specific layers to system RAM, ensuring enough VRAM remained for real-time voice synthesis. With this optimization responses even with voice mode are almost instant.
 
 * Breaking the Dependency Loop: I successfully navigated a "**dependency hell**" scenario where the original TTS library was unmaintained and conflicting with modern Python 3.11 environments. I solved this by surgically patching library imports and pivoting to a community-maintained ONNX-based architecture for better stability and performance. In the future I am Planning to train my own audio model.
 
@@ -113,7 +122,7 @@ Edit `server/main.py` to customize:
 
 Llama for model and training -> https://github.com/ggml-org/llama.cpp
 
-Model used -> https://huggingface.co/TheBloke/Ana-v1-m7-GGUF
+Model used -> https://huggingface.co/Lewdiculous/Llama-3-Lumimaid-8B-v0.1-OAS-GGUF-IQ-Imatrix
 
 STT Faster-Whisper -> https://github.com/SYSTRAN/faster-whisper
 

@@ -5,7 +5,10 @@ logs/
 *.bin
 .env
 tests.py
+vesi_config.yaml
 
 .idea/
+.claude/
 node_modules/
 *.vrm
+

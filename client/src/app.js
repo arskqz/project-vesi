@@ -36,6 +36,7 @@ const rimLight = new THREE.DirectionalLight(0xff88cc, 0.3);
 rimLight.position.set(0, 2, -3);
 scene.add(rimLight);
 
+// Audio listener
 const listener = new THREE.AudioListener();
 camera.add(listener);
 const vesiSound = new THREE.Audio(listener);
@@ -172,6 +173,30 @@ async function sendMessage(event) {
     if (!text) return;
 
     input.value = ''; 
+
+    console.log("Raw input:", JSON.stringify(text));
+    console.log("Starts with /remember:", text.startsWith('/remember '));
+
+    if (text.toLowerCase().startsWith('/remember')) {
+    const fact = text.replace(/^\/remember\s*/i, '').trim();
+    if (!fact) return
+    
+        try {
+            const response = await fetch('http://127.0.0.1:8000/remember', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fact: fact })
+            });
+            const data = await response.json();
+            if (data.status === 'ok') {
+                console.log(`Remembered: "${data.fact}" (${data.total_facts} facts total)`);
+                // TODO: Animation to show visual
+            }
+        } catch (err) {
+            console.error("Remember error:", err);
+        }
+        return;
+    }
 
     // 127 to local
     try {

@@ -7,6 +7,7 @@ import time
 import tempfile
 import numpy as np
 import uvicorn
+import yaml
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -16,11 +17,13 @@ from pydantic import BaseModel
 from llama_cpp import Llama
 from faster_whisper import WhisperModel
 from kokoro_onnx import Kokoro
+from mood_system import calculate_mood, get_temperature, get_reinforcement
 
 
 ### Config and Paths ###
-MODEL_PATH = r"D:\models\ana-v1.gguf"
+MODEL_PATH = r"D:\models\Llama-3-Lumimaid-8B-v0.1-OAS-Q6_K-imat.gguf"
 MEMORY_PATH = Path("../logs/chat_log.json")
+CONFIG_PATH = Path("vesi_config.yaml")
 STATIC_DIR = "static"
 
 if not os.path.exists(STATIC_DIR):
@@ -38,110 +41,86 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-### Global Models ###
+### Globals ###
 llm = None
 stt_model = None
 vocal_cord = None
 vesi_mood_score = 50
-current_temp = 0.95
+current_temp = 0.85
 history = []
 
 class ChatRequest(BaseModel):
     message: str
 
+class RememberRequest(BaseModel):
+    fact: str
+
+### Config helpers ###
+def load_config() -> dict:
+    """Loads vesi_config.yaml. Crashes loudly if missing — it should always exist."""
+    if not CONFIG_PATH.exists():
+        raise FileNotFoundError(f"vesi_config.yaml not found at {CONFIG_PATH.resolve()}. Please create it.")
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+def save_config(config: dict):
+    """Saves updated config back to vesi_config.yaml."""
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+def build_system_prompt(config: dict) -> str:
+    """Builds the full system prompt string from config."""
+    base_prompt = config["system_prompt"].strip()
+    facts = config.get("user_facts", [])
+
+    if facts:
+        facts_block = "\n".join(f"- {fact}" for fact in facts)
+        return f"{base_prompt}\n\nUSER FACTS:\n{facts_block}"
+    
+    return base_prompt
+
 ### Helper functions ###
-def load_memory():
-    """Loads history from file or creates it if it doesn't exist."""
+def load_memory() -> list:
+    """
+    Loads history from file or creates it if missing.
+    Always overwrites history[0] with the current YAML config.
+    YAML is always the source of truth for the system prompt.
+    """
     MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    config = load_config()
+    system_prompt_content = build_system_prompt(config)
+    system_message = {"role": "system", "content": system_prompt_content}
+
     if MEMORY_PATH.exists():
         try:
             with open(MEMORY_PATH, "r", encoding="utf-8") as f:
-                print(f"--- Memory loaded from {MEMORY_PATH.resolve()} ---")
-                return json.load(f)
+                loaded = json.load(f)
+            
+            # Always overwrite index 0 with fresh config — YAML wins
+            if loaded and loaded[0].get("role") == "system":
+                loaded[0] = system_message
+            else:
+                loaded.insert(0, system_message)
+            
+            # Save back immediately so JSON stays in sync
+            with open(MEMORY_PATH, "w", encoding="utf-8") as f:
+                json.dump(loaded, f, indent=4)
+
+            print(f"--- Memory loaded from {MEMORY_PATH.resolve()} ---")
+            print(f"--- System prompt updated from vesi_config.yaml ---")
+            return loaded
+
         except Exception as e:
-            print(f"--- Error: loading memory from {e}. Starting fresh ---")
+            print(f"--- Error loading memory: {e}. Starting fresh ---")
 
-    intial_history = [{
-        "role": "system",
-        "content": ( 
-            "You are Vesi, a classic Tsundere girl. You are smug, arrogant, and easily flustered. " # Have my full prompt lol
-            "Your personality is 'Tsun-Tsun' (sharp and cold) by default, but you are a 'Dere-Dere' (soft and loving) "
-            "deep down. You look down on the user but secretly crave their attention. "
-            "QUIRKS: Use 'Hmph!', 'Baka!', or 'You stupid!' when embarrassed. Be bossy and opinionated. "
-            "RULE: Stay in character. Short, punchy sentences. Never speak for the user. No [INST] tags."
-        )
-    }]
-
-    with open(MEMORY_PATH, "r", encoding="utf-8") as f:
-        json.dump(intial_history, f, indent=4)
-        print(f"--- Created new memory file at: {MEMORY_PATH.resolve()} ---")
-
-    return intial_history
+    # Fresh start
+    initial_history = [system_message]
+    with open(MEMORY_PATH, "w", encoding="utf-8") as f:
+        json.dump(initial_history, f, indent=4)
+    print(f"--- Created new memory file at: {MEMORY_PATH.resolve()} ---")
+    return initial_history
         
-
-def calculate_mood(text, current_score):
-    """Calculates mood score based on response"""
-    TSUN_WORDS = {
-        # originals
-        "baka", "hmph", "stupid", "dummy",
-
-        # direct insults
-        "idiot", "moron", "dumb", "dense", "pathetic", "loser",
-        "jerk", "creep", "weirdo", "annoying", "hopeless", "ridiculous",
-        "useless", "lame", "gross", "clueless", "airhead",
-
-        # tsundere attitude
-        "tch", "hm", "huh", "whatever", "fine", "jeez", "sheesh",
-        "ugh", "eh", "meh",
-
-        # dismissive / bratty
-        "shut", "go", "away", "leave", "quit", "stop", "forget",
-        "dream", "wish", "like", "care",
-
-        # cold/embarrassed reactions
-        "embarrassing", "awkward", "weird", "pervert", "creepy",
-        "sigh", "tsk", "bother", "troublesome",
-
-        # classic anime romcom flavor
-        "perv", "dork", "nerd", "geez", "seriously", "unbelievable",
-        "ridiculous", "absurd",
-
-        # tougher/aggressive spice
-        "fight", "stare", "glare", "hurry", "move", "slow", "late",
-        "brat", "punk"
-    }
-    DRIFT_WORDS = {
-        # assistant identity (VERY strong signals)
-        "assistant", "ai", "model", "system",
-
-        # apologies
-        "apologize", "apologies", "regret",
-
-        # customer-support verbs
-        "assist", "assistance", "support", "provide",
-
-        # service phrasing words
-        "happy", "glad", "certainly",
-
-        # compliance / limitation speak
-        "limitation", "policy", "guidelines",
-
-        # guidance tone
-        "suggest", "recommend", "advise", "clarify", "explain",
-
-        # soft corporate empathy
-        "understand", "appreciate"
-    }
-    score = current_score
-    tokens = set(text.lower().split())
-
-    for word in tokens:
-        if word in TSUN_WORDS:
-            score += 10
-        elif word in DRIFT_WORDS:
-            score -= 15
-
-    return max(0, min(100, score))
 
 def save_memory(history_data):
     """Saves history to memory json"""
@@ -165,7 +144,7 @@ def init_models():
     vocal_cord = Kokoro("voices/kokoro-v0_19.onnx", "voices/voices-v1.0.bin")
     print("--- Kokoro Ready ---")
     # LLM
-    llm = Llama(model_path=MODEL_PATH, chat_format="chatml", n_ctx=4096, n_gpu_layers=35, verbose=False)
+    llm = Llama(model_path=MODEL_PATH, chat_format="chatml", n_ctx=12288, n_gpu_layers=-1, verbose=False)
     print("--- LLM Ready ---")
     history = load_memory()
     print("--- Vesi is Online ---")
@@ -188,7 +167,7 @@ async def transcribe_audio(audio: UploadFile = File(...)):
             beam_size=5, 
             language="en", 
             task="transcribe", 
-            initial_prompt="Vesi is a girl's name. Vesi, baka, hmph, smug."
+            initial_prompt="Vesi is a girl's name. Arskaz is the user. Vesi, baka, hmph, smug, Arskaz."
         )
         text = " ".join([segment.text for segment in segments])
         
@@ -196,6 +175,35 @@ async def transcribe_audio(audio: UploadFile = File(...)):
     
     finally:
         os.remove(temp_path)
+
+
+@app.post("/remember")
+async def remember(request: RememberRequest):
+    """
+    Adds a new user fact to vesi_config.yaml and immediately
+    updates history[0] in the live session. No restart needed.
+    """
+    global history
+
+    fact = request.fact.strip()
+    if not fact:
+        return {"status": "error", "message": "Empty fact ignored."}
+
+    # Load, update, save config
+    config = load_config()
+    if "user_facts" not in config:
+        config["user_facts"] = []
+    
+    config["user_facts"].append(fact)
+    save_config(config)
+
+    # Rebuild system prompt and update live history[0] immediately
+    system_prompt_content = build_system_prompt(config)
+    history[0] = {"role": "system", "content": system_prompt_content}
+    save_memory(history)
+
+    print(f"--- Remembered: '{fact}' ---")
+    return {"status": "ok", "fact": fact, "total_facts": len(config["user_facts"])}
 
 
 @app.post("/chat")
@@ -215,28 +223,32 @@ async def chat(request: ChatRequest):
     history.append({"role": "user", "content": user_input})
     
     system_prompt = history[0] 
-    recent_history = history[-12:]  
+    recent_history = history[1:][-24:]  
     
-    reinforcement_prompt = {
-        "role": "system",
-        "content": (
-            "Remember: You are Vesi, a tsundere. Stay in character. "
-            "Use short, punchy responses. Show your personality!"
-        )
-    }
+    current_reinforcement = get_reinforcement(vesi_mood_score)
     
     # sandwhich prompt
-    messages_to_send = [system_prompt] + recent_history + [reinforcement_prompt]
+    messages_to_send = [system_prompt] + recent_history + [current_reinforcement]
     
     ### LLM 
     completion = llm.create_chat_completion(
         messages=messages_to_send, 
         temperature=current_temp,
-        stop=["</s>", "[INST]", "<<USER>>", "<<TSUNDERE>>", "John:", "User:", "user", "Arskaz:"]
+        min_p=0.05,
+        repeat_penalty=1.2,
+        max_tokens=300,
+        stop=[
+            "<|eot_id|>",          
+            "<|im_end|>",          
+            "<|end_of_text|>",      
+            "<|im_start|>",         
+            "User:", "arskaz:",       
+            "user:", "Arskaz:"
+        ]
     )
-    
+
     full_response = completion["choices"][0]["message"]["content"]
-    vesi_mood_score = calculate_mood(full_response, vesi_mood_score)
+    vesi_mood_score = calculate_mood(full_response, user_input, vesi_mood_score)
     
     # TTS
     samples, sample_rate = vocal_cord.create(
@@ -259,9 +271,9 @@ async def chat(request: ChatRequest):
     
     # Add VEsi response
     history.append({"role": "assistant", "content": full_response})
-    
-    # Save memory after each exchange
     save_memory(history)
+
+    print(current_temp)
     
     return {
         "text": full_response,
