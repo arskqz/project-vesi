@@ -239,12 +239,15 @@ async def chat(request: ChatRequest):
         repeat_penalty=1.25,
         max_tokens=250,
         stop=[
-            "<|eot_id|>",          
-            "<|im_end|>",          
-            "<|end_of_text|>",      
-            "<|im_start|>",         
-            "User:", "arskaz:",       
-            "user:", "Arskaz:"
+            "<|eot_id|>",
+            "<|im_end|>",
+            "<|end_of_text|>",
+            "<|im_start|>",
+            "<user>",
+            "\n<user>",
+            "User:", "arskaz:",
+            "user:", "Arskaz:",
+            "\nUser:", "\nuser:",
         ]
     )
 
