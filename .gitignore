@@ -5,10 +5,19 @@ logs/
 *.bin
 .env
 tests.py
+converter.py
 vesi_config.yaml
 
 .idea/
 .claude/
 node_modules/
+
+vesi_train.jsonl
+vesi_dataset.json
+.ipynb_checkpoints/
+llama.cpp/
+unsloth_compiled_cache/
+vesi_checkpoints/
+
 *.vrm
 

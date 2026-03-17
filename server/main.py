@@ -18,10 +18,11 @@ from llama_cpp import Llama
 from faster_whisper import WhisperModel
 from kokoro_onnx import Kokoro
 from mood_system import calculate_mood, get_temperature, get_reinforcement
+from memory import should_compress, compress, build_messages
 
 
 ### Config and Paths ###
-MODEL_PATH = r"D:\models\Llama-3-Lumimaid-8B-v0.1-OAS-Q6_K-imat.gguf"
+MODEL_PATH = r"D:\models\lumi_vesi_v1.1_q6k.gguf"
 MEMORY_PATH = Path("../logs/chat_log.json")
 CONFIG_PATH = Path("vesi_config.yaml")
 STATIC_DIR = "static"
@@ -46,7 +47,6 @@ llm = None
 stt_model = None
 vocal_cord = None
 vesi_mood_score = 50
-current_temp = 0.85
 history = []
 
 class ChatRequest(BaseModel):
@@ -226,6 +226,7 @@ async def chat(request: ChatRequest):
     recent_history = history[1:][-24:]  
     
     current_reinforcement = get_reinforcement(vesi_mood_score)
+    current_temp = get_temperature(vesi_mood_score)
     
     # sandwhich prompt
     messages_to_send = [system_prompt] + recent_history + [current_reinforcement]
@@ -235,8 +236,8 @@ async def chat(request: ChatRequest):
         messages=messages_to_send, 
         temperature=current_temp,
         min_p=0.05,
-        repeat_penalty=1.2,
-        max_tokens=300,
+        repeat_penalty=1.25,
+        max_tokens=250,
         stop=[
             "<|eot_id|>",          
             "<|im_end|>",          
@@ -273,7 +274,10 @@ async def chat(request: ChatRequest):
     history.append({"role": "assistant", "content": full_response})
     save_memory(history)
 
-    print(current_temp)
+    # Fire compression if raw turn count exceeds threshold
+    # Runs after response is sent so User never waits for it
+    if should_compress(history):
+        history = compress(history, llm)
     
     return {
         "text": full_response,
