@@ -54,6 +54,7 @@ If you are interested in training your own model check out:
 - [Unsloth Documentation](https://docs.unsloth.ai)
 - [Hugging Face Documentation](https://huggingface.co/docs)
 - [llama.cpp](https://github.com/ggerganov/llama.cpp)
+- [Maxine Labonne LLM fine-tuning with unsloth](https://mlabonne.github.io/blog/posts/2024-07-29_Finetune_Llama31.html)
 
 
 ## :wrench: Setup
