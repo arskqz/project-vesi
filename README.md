@@ -43,7 +43,18 @@ Built with Three.js, VRM, and Python. Tested on Python 3.11.14 and Windows > 10.
 
 Vesi runs on a **custom fine-tuned Llama 3 8B model**, trained using [Unsloth](https://github.com/unslothai/unsloth) with LoRA on a hand-crafted conversational dataset (~400 examples). The model is quantized to Q6_K GGUF for efficient local inference.
 
-The trained model and dataset are **not publicly available** because the training data contains personal information. However, the full training pipeline is documented in [`training/training.ipynb`](training/training.ipynb). Feel free to use it as a reference to fine-tune your own model with your own data.
+The full dataset contains personal information and won't be shared, but a cleaned public version (~300 conversations) 
+is available on HuggingFace: [Tsundere-AI Dataset](https://huggingface.co/datasets/arskaz/Tsundere-AI). 
+It's a good starting point for training your own character AI with minimal tweaking.
+
+However, the full training pipeline is documented in [`training/training.ipynb`](training/training.ipynb). Feel free to use it as a reference to fine-tune your own model with your own data.
+
+If you are interested in training your own model check out:
+
+- [Unsloth Documentation](https://docs.unsloth.ai)
+- [Hugging Face Documentation](https://huggingface.co/docs)
+- [llama.cpp](https://github.com/ggerganov/llama.cpp)
+
 
 ## :wrench: Setup
 
