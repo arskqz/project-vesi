@@ -17,12 +17,13 @@ from pydantic import BaseModel
 from llama_cpp import Llama
 from faster_whisper import WhisperModel
 from kokoro_onnx import Kokoro
-from mood_system import calculate_mood, get_temperature, get_reinforcement
+from mood_system import calculate_mood, get_temperature, get_emotion, get_tts_speed
 from memory import should_compress, compress, build_messages
+from tools import get_passive_context, run_active_tools
 
 
 ### Config and Paths ###
-MODEL_PATH = r"D:\models\lumi_vesi_v1.1_q6k.gguf"
+MODEL_PATH = r"D:/models/lumi_vesi_v2.0_q6k.gguf"
 MEMORY_PATH = Path("../logs/chat_log.json")
 CONFIG_PATH = Path("vesi_config.yaml")
 STATIC_DIR = "static"
@@ -80,6 +81,37 @@ def build_system_prompt(config: dict) -> str:
     return base_prompt
 
 ### Helper functions ###
+
+# Patterns that signal Vesi stopped talking and "became" the user or system
+_ROLE_LEAK_PATTERNS = [
+    r"<\|im_end\|>",
+    r"<\|im_start\|>",
+    r"<\|eot_id\|>",
+    r"<\|end_of_text\|>",
+    r"<user",              
+    r"<system",            
+    r"<\|user",
+    r"<\|User",
+    r"<\|system",          
+    r"<\|arskaz",
+    r"\nUser:",
+    r"\nuser:",
+    r"\nArskaz:",
+    r"\narskaz:",
+    r"\nSystem:",
+    r"\nsystem:",
+]
+
+_ROLE_LEAK_RE = re.compile("|".join(_ROLE_LEAK_PATTERNS), re.IGNORECASE)
+
+def clean_response(text: str) -> str:
+    """Strip everything from the first role-leak pattern onward."""
+    match = _ROLE_LEAK_RE.search(text)
+    if match:
+        text = text[:match.start()]
+    return text.strip()
+    
+
 def load_memory() -> list:
     """
     Loads history from file or creates it if missing.
@@ -127,9 +159,6 @@ def save_memory(history_data):
     with open(MEMORY_PATH, "w", encoding="utf-8") as f:
         json.dump(history_data, f, indent=4)
 
-# TODO: Func to input 'What do you want baka!' or similar
-# to llm response while it gens next response for instant
-# response.
 
 ### Model initialization ### 
 def init_models():
@@ -222,28 +251,50 @@ async def chat(request: ChatRequest):
     user_input = request.message
     history.append({"role": "user", "content": user_input})
     
-    system_prompt = history[0] 
-    recent_history = history[1:][-24:]  
-    
-    current_reinforcement = get_reinforcement(vesi_mood_score)
     current_temp = get_temperature(vesi_mood_score)
-    
-    # sandwhich prompt
-    messages_to_send = [system_prompt] + recent_history + [current_reinforcement]
-    
-    ### LLM 
+
+    # build prompt
+    messages_to_send = build_messages(history)
+
+    # Passive tools — always inject into system prompt
+    passive_ctx = get_passive_context()
+    emotion = get_emotion(vesi_mood_score)
+    mood_hints = {
+        "tsun":    "[Vesi is currently in a cold, irritated mood.]",
+        "neutral": "[Vesi is in her usual smug, composed mood.]",
+        "dere":    "[Vesi is currently feeling flustered and softer than usual.]",
+    }
+    messages_to_send[0] = {
+        "role": "system",
+        "content": messages_to_send[0]["content"] + f"\n\nCONTEXT:\n{passive_ctx}\n\n{mood_hints[emotion]}"
+    }
+
+    # Active tools — only when triggered by user input
+    active_ctx = run_active_tools(user_input)
+    if active_ctx:
+        messages_to_send.insert(-1, {"role": "system", "content": f"CONTEXT: {active_ctx}"})
+
+
+    ### LLM
+    # parameters for llm
     completion = llm.create_chat_completion(
         messages=messages_to_send, 
-        temperature=current_temp,
-        min_p=0.05,
-        repeat_penalty=1.25,
-        max_tokens=250,
-        stop=[
+        temperature=current_temp,   # temp, "creativity"
+        top_k=50,                   # Choose fron N tokens
+        # top_p=0.9,                # min_p works better
+        min_p=0.05,                 # Focus on tokens with 1% < probability
+        repeat_penalty=1.1,        # force model to use varied words
+        max_tokens=150,             # Prevent yapping (tsundere -> short)
+        stop=[                      # Prevent model from talking to itself or unwanted words
             "<|eot_id|>",
             "<|im_end|>",
             "<|end_of_text|>",
             "<|im_start|>",
             "<user>",
+            "arskaz",
+            "<|user",
+            "<|User>",
+            "<|arskaz>"
             "\n<user>",
             "User:", "arskaz:",
             "user:", "Arskaz:",
@@ -251,14 +302,15 @@ async def chat(request: ChatRequest):
         ]
     )
 
-    full_response = completion["choices"][0]["message"]["content"]
+    raw_response = completion["choices"][0]["message"]["content"]
+    full_response = clean_response(raw_response)
     vesi_mood_score = calculate_mood(full_response, user_input, vesi_mood_score)
     
     # TTS
     samples, sample_rate = vocal_cord.create(
-        full_response, 
-        voice="af_bella", 
-        speed=1.25, 
+        full_response,
+        voice="af_bella",
+        speed=get_tts_speed(vesi_mood_score),
         lang="en-us"
     )
     
@@ -278,13 +330,14 @@ async def chat(request: ChatRequest):
     save_memory(history)
 
     # Fire compression if raw turn count exceeds threshold
-    # Runs after response is sent so User never waits for it
+    # Runs after response is sent
     if should_compress(history):
         history = compress(history, llm)
     
     return {
         "text": full_response,
         "mood": vesi_mood_score,
+        "emotion": emotion,
         "audio_url": f"http://localhost:8000/static/{audio_filename}?t={os.urandom(4).hex()}"
     }
 

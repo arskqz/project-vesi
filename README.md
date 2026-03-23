@@ -7,13 +7,16 @@ Built with Three.js, VRM, and Python. Tested on Python 3.11.14 and Windows > 10.
 
 ## :rocket: Features
 
-* :brain: **Local Brain**: Powered by `Llama` models. No API keys or subscriptions.
+* :brain: **Local Brain**: Powered by a custom fine-tuned `Llama 3` model. No API keys or subscriptions.
 * :ear: **Sharp Ears**: Uses `Faster-Whisper` to transcribe your voice. Fast and works well even for rally-english.
-* :anger: **Memory & Attitude**: Easily configurable personality and remembers conversation history. Mood system tracks emotional state.
+* :anger: **Mood System**: Bidirectional "dere meter" (0–100) that scans both Vesi's responses and user input for emotional keywords. Drives LLM temperature, TTS speech speed, and frontend mood bar in real time.
+* :floppy_disk: **Memory Compression**: Long-term memory via LLM-powered summarization. Old conversation turns are compressed into narrative blocks in Vesi's voice, keeping recent context hot.
 * :speech_balloon: **Clear Voice**: Uses `Kokoro-82M` for loud and clear human-like speech with lip sync.
 * :microphone: **Push-to-Talk**: Hold the mic button to speak, release to auto-send. Seamless voice interaction.
 * :art: **3D Avatar**: Interactive VRM character with natural idle animations, breathing, and blinking.
 * :loop: **Hybrid Input**: Switch between speaking and keyboard on the fly.
+* :wrench: **Tool System** *(Experimental)*: Context injection layer before LLM calls. Passive tools (datetime) always run; active tools trigger on user input keywords. Easily extensible.
+* :memo: **Live Config**: Personality and user facts defined in `vesi_config.yaml`. Add facts at runtime via the `/remember` endpoint. No restart needed.
 
 ## :hammer: Tech Stack
 
@@ -35,6 +38,12 @@ Built with Three.js, VRM, and Python. Tested on Python 3.11.14 and Windows > 10.
 **DEMO VIDEO LIVE**
 
 * https://www.youtube.com/watch?v=i9Aj_RLnwOU
+
+## :brain: Custom Fine-Tuned Model
+
+Vesi runs on a **custom fine-tuned Llama 3 8B model**, trained using [Unsloth](https://github.com/unslothai/unsloth) with LoRA on a hand-crafted conversational dataset (~400 examples). The model is quantized to Q6_K GGUF for efficient local inference.
+
+The trained model and dataset are **not publicly available** because the training data contains personal information. However, the full training pipeline is documented in [`training/training.ipynb`](training/training.ipynb). Feel free to use it as a reference to fine-tune your own model with your own data.
 
 ## :wrench: Setup
 
@@ -62,26 +71,14 @@ pip install -r requirements.txt
 - Change the file name to `vesi_config.yaml`
 - Feel free to play around with the mood system and change it to your liking. 
 
-### 5. Run the backend
-
-MAKE SURE YOU ARE IN `server/`!
-
-```bash
-python main.py
-```
-
-### 6. Download three.js
+### 5. Download three.js
 - Download three.js, three VRM and Tailwind css using `npm`, `vite` or something else.
 
-### 7. Run the frontend
-```bash
-cd ../client
-python -m http.server 5500
-```
+### 6. Run start script 
+- Edit your conda path and environment name.
+- run `start.bat`.
 
-### 8. Open in browser
-Navigate to `http://127.0.0.1:5500`
-
+I'll add bash one soon... 
 
 ⚠️ Warning: This isn't a "one-click" install. You are going to encounter many errors. **Good luck!**
 
@@ -91,18 +88,24 @@ Navigate to `http://127.0.0.1:5500`
 * **Watch**: Vesi responds with voice, lip sync, and mood changes
 
 ## :gear: Configuration
-Edit `server/main.py` to customize:
-* Model path
-* System prompt (personality) and reinforcement prompt (remeber personality)
-* Temperature settings
-* Mood calculation words based on personality (eg. "Baka" good for tsundere types.)
+
+**Personality** — Edit `server/vesi_config.yaml`:
+* `system_prompt` — Vesi's full personality prompt
+* `user_facts` — List of facts about the user, injected into the system prompt. Can also be added at runtime via the `/remember` API endpoint.
+
+**Model & Inference** — Edit `server/main.py`:
+* `MODEL_PATH` — Path to your `.gguf` model file
+* `n_gpu_layers` — GPU/CPU layer offloading (tune for your VRAM)
+
+**Mood System** — Edit `server/mood_system.py`:
+* Tsun/dere keyword lists for Vesi's responses and user input
+* Score-to-temperature and score-to-TTS-speed mappings
+
+**Tools** — Edit `server/tools.py`:
+* Add passive tools (always injected) or active tools (keyword-triggered) to extend Vesi's context awareness
 
 
 ## 🗺️ TODO
-
-* [ X ] Video showcase.
-
-* [ ] Memory and Prompt: faiss... 
 
 * [ ] More animations: Custom animations and multiple vrm model support.
 
@@ -113,10 +116,17 @@ Edit `server/main.py` to customize:
 
 ## :mag_right: Technical Challenges & Solutions
 
-* The VRAM Tightrope: One of the biggest hurdles was managing the memory budget of a high-performance LLM alongside a GPU-intensive TTS. I optimized the system by utilizing **6-bit GGUF quantization** for the Llama model and dynamically offloading specific layers to system RAM, ensuring enough VRAM remained for real-time voice synthesis. With this optimization responses even with voice mode are almost instant.
+* **The VRAM Tightrope:** One of the biggest hurdles was managing the memory budget of a high-performance LLM alongside a GPU-intensive TTS. I optimized the system by utilizing **6-bit GGUF quantization** for the Llama model and dynamically offloading specific layers to system RAM, ensuring enough VRAM remained for real-time voice synthesis. With this optimization responses even with voice mode are almost instant.
 
-* Breaking the Dependency Loop: I successfully navigated a "**dependency hell**" scenario where the original TTS library was unmaintained and conflicting with modern Python 3.11 environments. I solved this by surgically patching library imports and pivoting to a community-maintained ONNX-based architecture for better stability and performance. In the future I am Planning to train my own audio model.
+* **Breaking the Dependency Loop:** I successfully navigated a "**dependency hell**" scenario where the original TTS library was unmaintained and conflicting with modern Python 3.11 environments. I solved this by surgically patching library imports and pivoting to a community-maintained ONNX-based architecture for better stability and performance.
 
+* **Fine-Tuning a Personality:** Training a model to feel like a real character — not a generic chatbot — required careful dataset engineering. With only ~400 hand-crafted examples, the margin between a flat personality and heavy overfitting was razor-thin. I iterated on LoRA rank, epoch count, and dataset balance to land on a model that captures Vesi's tsundere voice without parroting the training data.
+
+## 🤖 State of Development
+
+This is an actively developed personal project. Expect rough edges and experimental features. It is built for learning and fun, not production use.
+
+Parts of this project were developed with **agent-assisted programming** using [Claude Code](https://docs.anthropic.com/en/docs/claude-code), as an experiment in AI-augmented development workflows. From testing Anthropic does not have much training data for on AI waifus.
 
 ## :clap: Credits
 

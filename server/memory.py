@@ -1,14 +1,15 @@
 ### Memory Compression System ###
 # Handles cold memory compression and prompt sandwich assembly.
-# Compression fires after /chat saves, never blocks a response.
+# Compression fires after /chat saves
 
 ### Imports ###
 import json
 from pathlib import Path
 
 ### Config ###
-COMPRESSION_THRESHOLD = 50   # Raw turns before compression fires
-COMPRESSION_TEMP = 0.7       # Lower temp for consistent summaries
+COMPRESSION_THRESHOLD = 60   # Raw turns before compression fires
+KEEP_RECENT = 10             # Raw turns to preserve after compression
+COMPRESSION_TEMP = 0.5       # Lower temp for consistent summaries
 MEMORY_PATH = Path("../logs/chat_log.json")
 
 COMPRESSOR_PROMPT = (
@@ -49,11 +50,14 @@ def should_compress(history: list) -> bool:
 
 def get_compressible_turns(history: list) -> list:
     """
-    Returns the oldest 50 raw user/assistant turns for compression.
-    Skips system messages and existing compressed blocks.
+    Returns the oldest raw turns for compression, keeping
+    the most recent KEEP_RECENT turns untouched.
     """
     raw_turns = [entry for entry in history if _is_raw_turn(entry)]
-    return raw_turns[:COMPRESSION_THRESHOLD]
+    compress_count = len(raw_turns) - KEEP_RECENT
+    if compress_count <= 0:
+        return []
+    return raw_turns[:compress_count]
 
 
 def compress(history: list, llm) -> list:
@@ -119,10 +123,10 @@ def compress(history: list, llm) -> list:
     return history
 
 
-def build_messages(history: list, reinforcement: dict) -> list:
+def build_messages(history: list) -> list:
     """
-    Assembles the full prompt sandwich to send to Llama.
-    Structure: [system prompt] + [compressed blocks] + [hot turns] + [reinforcement]
+    Assembles the prompt to send to Llama.
+    Structure: [system prompt] + [compressed blocks] + [session break] + [hot turns]
     Strips the type field from compressed blocks before sending.
     Hot turns = last 6 raw user/assistant turns.
     """
@@ -133,9 +137,18 @@ def build_messages(history: list, reinforcement: dict) -> list:
     ]
 
     raw_turns = [e for e in history if _is_raw_turn(e)]
-    hot_turns = raw_turns[-6:] 
+    hot_turns = raw_turns[-6:]
 
-    return [system_prompt] + compressed_blocks + hot_turns + [reinforcement]
+    session_break = {
+        "role": "system",
+        "content": (
+            "--- PAST MEMORIES END ---\n"
+            "The above are memories from previous conversations, for background reference only.\n"
+            "The CURRENT conversation starts now. Respond only to what follows."
+        )
+    }
+
+    return [system_prompt] + compressed_blocks + [session_break] + hot_turns
 
 
 def save_memory(history_data: list):

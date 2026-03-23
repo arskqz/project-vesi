@@ -104,27 +104,30 @@ def calculate_mood(vesi_text: str, user_text: str, current_score: int) -> int:
 def get_temperature(score: int) -> float:
     """Maps mood score to LLM temperature."""
     if score <= 30:
-        return 0.75   # Cold, controlled tsun
+        return 0.85   # Cold, controlled tsun
     elif score <= 70:
-        return 0.85   # Default smug Vesi
+        return 0.95   # Default smug Vesi
     else:
-        return 0.95   # Flustered dere, slightly unpredictable
+        return 1.05   # Flustered dere, slightly unpredictable
 
 
-def get_reinforcement(score: int) -> dict:
-    """
-    Returns reinforcement system prompt based on mood score.
-    
-    You can change this to your liking or just remove the system. 
-    """
-    if score > 70:
-        mood_note = "You are feeling unusually soft towards Arskaz. Be shy and clumsy but keep your pride. Stutter slightly."
-    elif score < 30:
-        mood_note = "You are cold and sharp. Use 'Baka!' freely. Short, cutting responses. No warmth whatsoever."
+def get_emotion(score: int) -> str:
+    """Maps mood score to a named emotion state."""
+    if score <= 30:
+        return "tsun"
+    elif score <= 70:
+        return "neutral"
     else:
-        mood_note = "Be your usual smug, bossy self. You're the AI in charge here."
+        return "dere"
 
-    return {
-        "role": "system",
-        "content": f"REMINDER: {mood_note} Use short, punchy responses. You are Vesi."
-    }
+
+def get_tts_speed(score: int) -> float:
+    """Maps mood score to Kokoro TTS speech speed."""
+    if score <= 30:
+        return 1.35    # Curt, clipped
+    elif score <= 70:
+        return 1.25   # Default
+    else:
+        return 1.05   # Softer, slightly hesitant
+
+

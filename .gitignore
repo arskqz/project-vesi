@@ -10,6 +10,7 @@ vesi_config.yaml
 
 .idea/
 .claude/
+CLAUDE.md
 node_modules/
 
 vesi_train.jsonl
