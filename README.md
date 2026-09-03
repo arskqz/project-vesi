@@ -1,5 +1,8 @@
 ![Vesi_temp](img/vesi_temp.png)
 
+> [!WARNING]
+> Ill be swapping models soon except chaos. Also tools are likely to get a purpose.
+
 # :ocean: Project Vesi
 Vesi is what happens when you give an anime personality a high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back **all without ever touching the cloud or relying on external APIs.**
 
@@ -119,11 +122,12 @@ I'll add bash one soon...
 
 ## 🗺️ TODO
 
+* [ X ] Memory update: Fix the memory system to better keep in context
+
 * [ ] More animations: Custom animations and multiple vrm model support.
 
 * [ ] Voice Evolution: Custom voice with Kokoro or something different.
 
-* [ ] Start script: If someone pesters me enough I'll do it. 
 
 
 ## :mag_right: Technical Challenges & Solutions

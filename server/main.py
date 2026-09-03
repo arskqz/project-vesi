@@ -17,10 +17,10 @@ from pydantic import BaseModel
 from llama_cpp import Llama
 from faster_whisper import WhisperModel
 from kokoro_onnx import Kokoro
+
 from mood_system import calculate_mood, get_temperature, get_emotion, get_tts_speed
 from memory import should_compress, compress, build_messages
 from tools import get_passive_context, run_active_tools
-
 
 ### Config and Paths ###
 MODEL_PATH = r"D:/models/lumi_vesi_v2.0_q6k.gguf"
@@ -173,7 +173,7 @@ def init_models():
     vocal_cord = Kokoro("voices/kokoro-v0_19.onnx", "voices/voices-v1.0.bin")
     print("--- Kokoro Ready ---")
     # LLM
-    llm = Llama(model_path=MODEL_PATH, chat_format="chatml", n_ctx=12288, n_gpu_layers=-1, verbose=False)
+    llm = Llama(model_path=MODEL_PATH, chat_format="chatml", n_ctx=12288, n_gpu_layers=99, verbose=False)
     print("--- LLM Ready ---")
     history = load_memory()
     print("--- Vesi is Online ---")
@@ -256,7 +256,7 @@ async def chat(request: ChatRequest):
     # build prompt
     messages_to_send = build_messages(history)
 
-    # Passive tools — always inject into system prompt
+    # Passive tools always inject into system prompt
     passive_ctx = get_passive_context()
     emotion = get_emotion(vesi_mood_score)
     mood_hints = {
@@ -269,7 +269,7 @@ async def chat(request: ChatRequest):
         "content": messages_to_send[0]["content"] + f"\n\nCONTEXT:\n{passive_ctx}\n\n{mood_hints[emotion]}"
     }
 
-    # Active tools — only when triggered by user input
+    # Active tools only when triggered by user input
     active_ctx = run_active_tools(user_input)
     if active_ctx:
         messages_to_send.insert(-1, {"role": "system", "content": f"CONTEXT: {active_ctx}"})
@@ -278,13 +278,13 @@ async def chat(request: ChatRequest):
     ### LLM
     # parameters for llm
     completion = llm.create_chat_completion(
-        messages=messages_to_send, 
+        messages=messages_to_send,
         temperature=current_temp,   # temp, "creativity"
-        top_k=50,                   # Choose fron N tokens
-        # top_p=0.9,                # min_p works better
+        top_k=40,                   # Choose from N tokens
+        top_p=0.85,                 # Nucleus sampling
         min_p=0.05,                 # Focus on tokens with 1% < probability
-        repeat_penalty=1.1,        # force model to use varied words
-        max_tokens=150,             # Prevent yapping (tsundere -> short)
+        repeat_penalty=1.2,         # force model to use varied words
+        max_tokens=100,             # Prevent yapping (tsundere -> short)
         stop=[                      # Prevent model from talking to itself or unwanted words
             "<|eot_id|>",
             "<|im_end|>",
@@ -340,6 +340,14 @@ async def chat(request: ChatRequest):
         "emotion": emotion,
         "audio_url": f"http://localhost:8000/static/{audio_filename}?t={os.urandom(4).hex()}"
     }
+
+@app.on_event("shutdown")
+def shutdown_models():
+    global llm, stt_model
+    if llm is not None:
+        llm.close()
+    if stt_model is not None:
+        del stt_model
 
 def main():
     init_models()

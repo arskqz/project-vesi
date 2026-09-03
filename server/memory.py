@@ -9,14 +9,15 @@ from pathlib import Path
 ### Config ###
 COMPRESSION_THRESHOLD = 60   # Raw turns before compression fires
 KEEP_RECENT = 10             # Raw turns to preserve after compression
-COMPRESSION_TEMP = 0.5       # Lower temp for consistent summaries
 MEMORY_PATH = Path("../logs/chat_log.json")
 
 COMPRESSOR_PROMPT = (
-    "Summarize the following conversation between Vesi and Arskaz in a single short "
-    "narrative paragraph in Vesi's voice. Focus on what happened and how Vesi felt, "
-    "without admitting she cared. Do not invent events. No bullet points. No preamble. "
-    "Write only the summary itself, nothing else."
+    "You are a factual note-taker, NOT a character. Do NOT write as Vesi. "
+    "Do NOT write in first person. Do NOT invent events that did not happen. "
+    "Summarize ONLY what was explicitly said in the conversation below. "
+    "Use third-person, past tense, factual tone. One paragraph, 2-3 sentences max. "
+    "Format: 'Arskaz and Vesi discussed [topics]. [Key decisions or facts shared].' "
+    "If unsure about something, omit it rather than guess."
 )
 
 
@@ -35,6 +36,24 @@ def _is_compressed_block(entry: dict) -> bool:
 def _strip_type_field(entry: dict) -> dict:
     """Returns entry without the type field — safe to send to Llama."""
     return {k: v for k, v in entry.items() if k != "type"}
+
+
+def _truncate(text: str, max_chars: int = 120) -> str:
+    """Truncate at sentence boundary, fall back to word boundary. Adds … when cut."""
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    # Try sentence boundary (. ! ?) in the allowed region
+    region = text[:max_chars]
+    for punct in (". ", "! ", "? "):
+        pos = region.rfind(punct)
+        if pos > max_chars // 3:          # don't cut absurdly short
+            return text[: pos + 1]
+    # Fall back to word boundary
+    last_space = region.rfind(" ")
+    if last_space > max_chars // 3:
+        return text[:last_space] + "…"
+    return region + "…"
 
 
 ### Core functions ###
@@ -73,32 +92,25 @@ def compress(history: list, llm) -> list:
 
     print(f"--- Compressing {len(turns_to_compress)} turns into a memory block ---")
 
-    # Build conversation text for the compressor
-    conversation_text = "\n".join(
-        f"{t['role'].capitalize()}: {t['content']}" for t in turns_to_compress
-    )
-
     # Determine turn range from history indices
     indices = [i for i, e in enumerate(history) if _is_raw_turn(e)]
     turn_range = [indices[0], indices[len(turns_to_compress) - 1]]
 
-    # Call Llama for compression
-    # Assistant prefill forces model to start summary directly, skipping preamble
-    try:
-        completion = llm.create_chat_completion(
-            messages=[
-                {"role": "system", "content": COMPRESSOR_PROMPT},
-                {"role": "user", "content": conversation_text},
-                {"role": "assistant", "content": "Arskaz came to me"}
-            ],
-            temperature=COMPRESSION_TEMP,
-            max_tokens=300,
-            repeat_penalty=1.1,
+    # Rule-based extraction: no LLM call, zero hallucination risk.
+    # Extracts actual text from the conversation rather than generating new text.
+    first_user = next((t for t in turns_to_compress if t["role"] == "user"), None)
+    last_pair = [t for t in turns_to_compress[-4:] if t["role"] in ("user", "assistant")][-2:]
+
+    parts = [f"[{len(turns_to_compress)} turns compressed]"]
+    if first_user:
+        parts.append(f'Started with: "{_truncate(first_user["content"], 120)}"')
+    if len(last_pair) == 2:
+        parts.append(
+            f'Ended with user: "{_truncate(last_pair[0]["content"], 100)}" / '
+            f'Vesi: "{_truncate(last_pair[1]["content"], 100)}"'
         )
-        summary = "Arskaz came to me " + completion["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        print(f"--- Compression failed: {e} ---")
-        return history
+
+    summary = " ".join(parts)
 
     # Build compressed block
     compressed_block = {
@@ -132,9 +144,13 @@ def build_messages(history: list) -> list:
     """
     system_prompt = history[0]
 
+    MAX_COMPRESSED_BLOCKS = 4
     compressed_blocks = [
         _strip_type_field(e) for e in history if _is_compressed_block(e)
     ]
+    
+    # Changed to only keep recent blocks to keep in context better
+    compressed_blocks = compressed_blocks[-MAX_COMPRESSED_BLOCKS:]
 
     raw_turns = [e for e in history if _is_raw_turn(e)]
     hot_turns = raw_turns[-6:]

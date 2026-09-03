@@ -52,12 +52,23 @@ USER_RUDE_WEAK = {
 }  # -5 each
 
 
+BASELINE_SCORE = 45  # Vesi's resting mood — slightly smug, never fully dere
+DECAY_RATE = 3       # Points pulled toward baseline each turn
+
 def calculate_mood(vesi_text: str, user_text: str, current_score: int) -> int:
     """
     Calculates mood score based on both Vesi's response and User's input.
     Phrase matching for multi-word signals, token matching for single words.
+    Applies decay toward baseline each turn so mood doesn't permanently drift.
     """
     score = current_score
+
+    # --- Decay toward baseline first ---
+    if score > BASELINE_SCORE:
+        score = max(BASELINE_SCORE, score - DECAY_RATE)
+    elif score < BASELINE_SCORE:
+        score = min(BASELINE_SCORE, score + DECAY_RATE)
+
     vesi_lower = vesi_text.lower()
     user_lower = user_text.lower()
     vesi_tokens = set(re.sub(r'[^\w\s]', '', vesi_lower).split())
@@ -104,11 +115,11 @@ def calculate_mood(vesi_text: str, user_text: str, current_score: int) -> int:
 def get_temperature(score: int) -> float:
     """Maps mood score to LLM temperature."""
     if score <= 30:
-        return 0.85   # Cold, controlled tsun
+        return 0.45   # Cold, controlled tsun
     elif score <= 70:
-        return 0.95   # Default smug Vesi
+        return 0.55   # Default smug Vesi
     else:
-        return 1.05   # Flustered dere, slightly unpredictable
+        return 0.70   # Flustered dere, slightly unpredictable
 
 
 def get_emotion(score: int) -> str:
