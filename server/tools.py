@@ -6,13 +6,17 @@
 ### Imports ###
 import datetime
 
+from logger import get_logger
+
+LOG = get_logger("tools")
+
 
 ### Tool functions ###
 
 def get_time() -> str:
     now = datetime.datetime.now()
     return now.strftime("%A, %B %d %Y, %H:%M")
-
+    
 
 ### Tool registries ###
 
@@ -44,6 +48,7 @@ def get_passive_context() -> str:
     results = []
     for tool in PASSIVE_TOOLS:
         result = tool["func"]()
+        LOG.debug("passive tool '%s' -> %s", tool["name"], result)
         results.append(tool["template"].format(result=result))
     return "\n".join(results)
 
@@ -53,7 +58,13 @@ def run_active_tools(user_input: str) -> str | None:
     lower = user_input.lower()
     results = []
     for tool in ACTIVE_TOOLS:
-        if any(kw in lower for kw in tool["keywords"]):
+        hit = next((kw for kw in tool["keywords"] if kw in lower), None)
+        if hit:
             result = tool["func"]()
+            LOG.debug("active tool '%s' triggered by '%s' -> %s", tool["name"], hit, result)
             results.append(tool["template"].format(result=result))
-    return "\n".join(results) if results else None
+
+    if not results:
+        LOG.debug("no active tools triggered")
+        return None
+    return "\n".join(results)

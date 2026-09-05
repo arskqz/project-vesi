@@ -1,13 +1,30 @@
-
 ### Mood System ###
-# Score represents Vesi's affection/dere level toward User
-# 0-30  = Full tsun (cold, sharp)
-# 31-70 = Default smug Vesi
-# 71-100 = Dere mode (flustered, softer)
-# Score persists per session, resets on restart
+# Score represents Vesi's affection/dere level toward the user.
+# Band layout and all weights/thresholds are configured in config/config.py
+# (MOOD_TSUN_MAX / MOOD_DERE_MIN). Score persists per session, resets on restart.
 
 ### Imports ###
 import re
+
+from config import (
+    MOOD_BASELINE,
+    MOOD_DECAY_RATE,
+    MOOD_DERE_MIN,
+    MOOD_MAX,
+    MOOD_MIN,
+    MOOD_STRONG_WEIGHT,
+    MOOD_TSUN_MAX,
+    MOOD_WEAK_WEIGHT,
+    TEMP_DERE,
+    TEMP_NEUTRAL,
+    TEMP_TSUN,
+    TTS_SPEED_DERE,
+    TTS_SPEED_NEUTRAL,
+    TTS_SPEED_TSUN,
+)
+from logger import get_logger, is_debug
+
+LOG = get_logger("mood")
 
 
 # --- Vesi Response Word Lists ---
@@ -15,20 +32,20 @@ import re
 # Tsun signals in Vesi's response -> LOWER score (she's being cold)
 VESI_TSUN_STRONG = {
     "baka", "idiot", "stupid", "dummy", "pathetic"
-}  # -10 each
+}  # -MOOD_STRONG_WEIGHT each
 
 VESI_TSUN_WEAK = {
     "tch", "annoying", "whatever", "buzz", "off", "tsk", "hmph"
-}  # -5 each
+}  # -MOOD_WEAK_WEIGHT each
 
 # Dere signals leaking through Vesi's response -> RAISE score
 VESI_DERE_STRONG = {
     "i-it's", "h-hey", "j-just", "i-i", "y-you"
-}  # +10 each (stuttering = peak flustered)
+}  # +MOOD_STRONG_WEIGHT each (stuttering = peak flustered)
 
 VESI_DERE_WEAK = {
     "suppose", "tolerable", "maybe", "fine", "acceptable", "once"
-}  # +5 each
+}  # +MOOD_WEAK_WEIGHT each
 
 # --- User Input Word Lists ---
 
@@ -36,24 +53,21 @@ VESI_DERE_WEAK = {
 USER_KIND_STRONG = {
     "thank you", "appreciate", "i like you", "you're great",
     "good job", "well done", "love you"
-}  # +10 each (phrase match)
+}  # +MOOD_STRONG_WEIGHT each (phrase match)
 
 USER_KIND_WEAK = {
     "please", "goodnight", "thanks", "nice", "cute", "good"
-}  # +5 each
+}  # +MOOD_WEAK_WEIGHT each
 
 # User being dismissive/rude -> LOWER score
 USER_RUDE_STRONG = {
     "shut up", "go away", "don't care", "i hate"
-}  # -10 each (phrase match)
+}  # -MOOD_STRONG_WEIGHT each (phrase match)
 
 USER_RUDE_WEAK = {
     "boring", "whatever", "annoying", "useless"
-}  # -5 each
+}  # -MOOD_WEAK_WEIGHT each
 
-
-BASELINE_SCORE = 45  # Vesi's resting mood — slightly smug, never fully dere
-DECAY_RATE = 3       # Points pulled toward baseline each turn
 
 def calculate_mood(vesi_text: str, user_text: str, current_score: int) -> int:
     """
@@ -64,69 +78,58 @@ def calculate_mood(vesi_text: str, user_text: str, current_score: int) -> int:
     score = current_score
 
     # --- Decay toward baseline first ---
-    if score > BASELINE_SCORE:
-        score = max(BASELINE_SCORE, score - DECAY_RATE)
-    elif score < BASELINE_SCORE:
-        score = min(BASELINE_SCORE, score + DECAY_RATE)
+    if score > MOOD_BASELINE:
+        score = max(MOOD_BASELINE, score - MOOD_DECAY_RATE)
+    elif score < MOOD_BASELINE:
+        score = min(MOOD_BASELINE, score + MOOD_DECAY_RATE)
 
     vesi_lower = vesi_text.lower()
     user_lower = user_text.lower()
     vesi_tokens = set(re.sub(r'[^\w\s]', '', vesi_lower).split())
     user_tokens = set(re.sub(r'[^\w\s]', '', user_lower).split())
 
-    # --- Vesi response scoring ---
-    for word in VESI_TSUN_STRONG:
-        if word in vesi_tokens:
-            score -= 10
+    # Each rule: (label, word set, points, haystack).
+    # A set haystack means whole-word matching, a string means phrase matching.
+    rules = [
+        ("vesi tsun", VESI_TSUN_STRONG,  -MOOD_STRONG_WEIGHT, vesi_tokens),
+        ("vesi tsun", VESI_TSUN_WEAK,    -MOOD_WEAK_WEIGHT,   vesi_tokens),
+        ("vesi dere", VESI_DERE_STRONG,  +MOOD_STRONG_WEIGHT, vesi_lower),
+        ("vesi dere", VESI_DERE_WEAK,    +MOOD_WEAK_WEIGHT,   vesi_tokens),
+        ("user kind", USER_KIND_STRONG,  +MOOD_STRONG_WEIGHT, user_lower),
+        ("user kind", USER_KIND_WEAK,    +MOOD_WEAK_WEIGHT,   user_tokens),
+        ("user rude", USER_RUDE_STRONG,  -MOOD_STRONG_WEIGHT, user_lower),
+        ("user rude", USER_RUDE_WEAK,    -MOOD_WEAK_WEIGHT,   user_tokens),
+    ]
 
-    for word in VESI_TSUN_WEAK:
-        if word in vesi_tokens:
-            score -= 5
+    debug = is_debug()
+    for label, words, points, haystack in rules:
+        for word in words:
+            if word in haystack:
+                score += points
+                if debug:
+                    LOG.debug("%s '%s' %+d", label, word, points)
 
-    for word in VESI_DERE_STRONG:
-        if word in vesi_lower:
-            score += 10
-
-    for word in VESI_DERE_WEAK:
-        if word in vesi_tokens:
-            score += 5
-
-    # --- User input scoring ---
-    for phrase in USER_KIND_STRONG:
-        if phrase in user_lower:
-            score += 10
-
-    for word in USER_KIND_WEAK:
-        if word in user_tokens:
-            score += 5
-
-    for phrase in USER_RUDE_STRONG:
-        if phrase in user_lower:
-            score -= 10
-
-    for word in USER_RUDE_WEAK:
-        if word in user_tokens:
-            score -= 5
-
-    return max(0, min(100, score))
+    final = max(MOOD_MIN, min(MOOD_MAX, score))
+    LOG.debug("score %d -> %d", current_score, final)
+    return final
 
 
 
 def get_temperature(score: int) -> float:
     """Maps mood score to LLM temperature."""
-    if score <= 30:
-        return 0.45   # Cold, controlled tsun
-    elif score <= 70:
-        return 0.55   # Default smug Vesi
+    if score <= MOOD_TSUN_MAX:
+        return TEMP_TSUN       # Cold, controlled tsun
+    elif score <= MOOD_DERE_MIN:
+        return TEMP_NEUTRAL    # Default smug Vesi
     else:
-        return 0.70   # Flustered dere, slightly unpredictable
+        return TEMP_DERE       # Flustered dere, slightly unpredictable
 
 
 def get_emotion(score: int) -> str:
-    """Maps mood score to a named emotion state."""
-    if score <= 30:
+    """Maps mood score to a named emotion state. Keys match config.MOOD_HINTS."""
+    if score <= MOOD_TSUN_MAX:
         return "tsun"
-    elif score <= 70:
+    elif score <= MOOD_DERE_MIN:
         return "neutral"
     else:
         return "dere"
@@ -134,11 +137,9 @@ def get_emotion(score: int) -> str:
 
 def get_tts_speed(score: int) -> float:
     """Maps mood score to Kokoro TTS speech speed."""
-    if score <= 30:
-        return 1.35    # Curt, clipped
-    elif score <= 70:
-        return 1.25   # Default
+    if score <= MOOD_TSUN_MAX:
+        return TTS_SPEED_TSUN      # Curt, clipped
+    elif score <= MOOD_DERE_MIN:
+        return TTS_SPEED_NEUTRAL   # Default
     else:
-        return 1.05   # Softer, slightly hesitant
-
-
+        return TTS_SPEED_DERE      # Softer, slightly hesitant

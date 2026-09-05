@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 
-// Scene 
+// Backend base URL — must match HOST/PORT in server/config/config.py
+const API_BASE = 'http://127.0.0.1:8000';
+
+// Scene
 const scene = new THREE.Scene();
 
 // Camera (set to about chest height)
@@ -182,7 +185,7 @@ async function sendMessage(event) {
     if (!fact) return
     
         try {
-            const response = await fetch('http://127.0.0.1:8000/remember', {
+            const response = await fetch(`${API_BASE}/remember`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fact: fact })
@@ -200,7 +203,7 @@ async function sendMessage(event) {
 
     // 127 to local
     try {
-        const response = await fetch('http://127.0.0.1:8000/chat', {
+        const response = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: text })
@@ -273,7 +276,7 @@ document.getElementById('mic-btn').addEventListener('mousedown', async function(
             formData.append('audio', audioBlob, 'recording.wav');
             
             try {
-                const response = await fetch('http://127.0.0.1:8000/transcribe', {
+                const response = await fetch(`${API_BASE}/transcribe`, {
                     method: 'POST',
                     body: formData
                 });

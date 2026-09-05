@@ -84,6 +84,10 @@ pip install -r requirements.txt
 ### 4. Add your own prompt
 - Add your own prompt to `vesi_config.example.yaml`
 - Change the file name to `vesi_config.yaml`
+- Set `USER_NAME` and `AI_NAME` in `server/config/config.py`, then use `{user}` / `{ai}`
+  in the prompt instead of writing names directly.
+- Point `MODEL_PATH` at your `.gguf` — either in `config.py` or via `server/.env`
+  (copy `server/.env.example`).
 - Feel free to play around with the mood system and change it to your liking. 
 
 ### 5. Download three.js
@@ -104,20 +108,60 @@ I'll add bash one soon...
 
 ## :gear: Configuration
 
-**Personality** — Edit `server/vesi_config.yaml`:
+**Everything tunable lives in `server/config/config.py`.** Each constant carries a
+comment saying what it controls. The sections are:
+
+* **Identity** — `USER_NAME` and `AI_NAME`. Change these two and the names propagate
+  everywhere: system prompt, stop tokens, role-leak filters, STT vocabulary hints,
+  mood hints and memory summaries.
+* **Paths** — `MODEL_PATH` (your `.gguf`), memory log, Kokoro voice files. All anchored
+  to `server/`, so the backend runs from any working directory.
+* **Server** — `HOST`, `PORT`, `PUBLIC_BASE_URL`, CORS origins.
+* **LLM** — `N_CTX`, `N_GPU_LAYERS` (tune for your VRAM), and the sampling params
+  (`TOP_K`, `TOP_P`, `MIN_P`, `REPEAT_PENALTY`, `MAX_TOKENS`).
+* **STT / TTS** — Whisper model size and device, Kokoro voice (`TTS_VOICE`) and language.
+* **Memory** — `COMPRESSION_THRESHOLD`, `KEEP_RECENT`, `HOT_TURNS`, `MAX_COMPRESSED_BLOCKS`.
+* **Mood** — baseline, decay rate, signal weights, the tsun/dere band boundaries, and the
+  score-to-temperature / score-to-TTS-speed values.
+* **Logging** — `LOG_LEVEL`, `LOG_TO_FILE` and the format. See below.
+
+**Logging** — always on, minimal by default:
+
+* `INFO` (default) — startup, one line per request, warnings and errors. Nothing else;
+  uvicorn access lines and llama-cpp perf output are silenced.
+* `DEBUG` — adds per-stage timings (LLM, TTS, total) and dumps the **fully assembled
+  prompt** message by message, the full response, and every mood signal that matched.
+  This is the fastest way to see what the model was actually given.
+
+Flip modes without editing anything: `set VESI_LOG_LEVEL=DEBUG` (or put it in `server/.env`).
+Set `VESI_LOG_FILE=1` to also write `logs/vesi_<timestamp>.log` — a fresh file per session,
+so old ones stick around until you delete them.
+
+```
+16:41:46 INFO  [main] initializing Vesi
+16:41:49 INFO  [main] Vesi is online at http://127.0.0.1:8000
+16:42:07 INFO  [chat] done in 2392ms | in 25 -> out 101 chars | mood 45->55 neutral
+```
+
+**Machine-specific paths** — Copy `server/.env.example` to `server/.env` (gitignored) and
+set `VESI_MODEL_PATH` there instead of editing `config.py`.
+
+**Personality** — Edit `server/vesi_config.yaml` (gitignored, so your prompt stays private):
 * `system_prompt` — Vesi's full personality prompt
 * `user_facts` — List of facts about the user, injected into the system prompt. Can also be added at runtime via the `/remember` API endpoint.
 
-**Model & Inference** — Edit `server/main.py`:
-* `MODEL_PATH` — Path to your `.gguf` model file
-* `n_gpu_layers` — GPU/CPU layer offloading (tune for your VRAM)
+Write `{user}` and `{ai}` in this file rather than literal names — they are filled in from
+`USER_NAME` / `AI_NAME`. Quote any list entry that *starts* with `{`, or YAML will read it
+as a mapping.
 
-**Mood System** — Edit `server/mood_system.py`:
-* Tsun/dere keyword lists for Vesi's responses and user input
-* Score-to-temperature and score-to-TTS-speed mappings
+**Mood keywords** — Edit `server/mood_system.py`:
+* Tsun/dere keyword lists for Vesi's responses and user input (the character vocabulary;
+  the numbers behind them are in `config.py`)
 
 **Tools** — Edit `server/tools.py`:
 * Add passive tools (always injected) or active tools (keyword-triggered) to extend Vesi's context awareness
+
+**Frontend** — If you change `PORT`, also update `API_BASE` at the top of `client/src/app.js`.
 
 
 ## 🗺️ TODO

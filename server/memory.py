@@ -1,24 +1,27 @@
 ### Memory Compression System ###
 # Handles cold memory compression and prompt sandwich assembly.
 # Compression fires after /chat saves
+# All tunables live in config/config.py
 
 ### Imports ###
 import json
-from pathlib import Path
 
-### Config ###
-COMPRESSION_THRESHOLD = 60   # Raw turns before compression fires
-KEEP_RECENT = 10             # Raw turns to preserve after compression
-MEMORY_PATH = Path("../logs/chat_log.json")
-
-COMPRESSOR_PROMPT = (
-    "You are a factual note-taker, NOT a character. Do NOT write as Vesi. "
-    "Do NOT write in first person. Do NOT invent events that did not happen. "
-    "Summarize ONLY what was explicitly said in the conversation below. "
-    "Use third-person, past tense, factual tone. One paragraph, 2-3 sentences max. "
-    "Format: 'Arskaz and Vesi discussed [topics]. [Key decisions or facts shared].' "
-    "If unsure about something, omit it rather than guess."
+from config import (
+    AI_NAME,
+    COMPRESSION_THRESHOLD,
+    HOT_TURNS,
+    JSON_INDENT,
+    KEEP_RECENT,
+    MAX_COMPRESSED_BLOCKS,
+    MEMORY_PATH,
+    MEMORY_PREFIX,
+    SESSION_BREAK_TEXT,
+    TRUNCATE_FIRST,
+    TRUNCATE_LAST,
 )
+from logger import get_logger
+
+LOG = get_logger("memory")
 
 
 ### Helper functions ###
@@ -38,7 +41,7 @@ def _strip_type_field(entry: dict) -> dict:
     return {k: v for k, v in entry.items() if k != "type"}
 
 
-def _truncate(text: str, max_chars: int = 120) -> str:
+def _truncate(text: str, max_chars: int = TRUNCATE_FIRST) -> str:
     """Truncate at sentence boundary, fall back to word boundary. Adds … when cut."""
     text = text.strip()
     if len(text) <= max_chars:
@@ -79,18 +82,18 @@ def get_compressible_turns(history: list) -> list:
     return raw_turns[:compress_count]
 
 
-def compress(history: list, llm) -> list:
+def compress(history: list) -> list:
     """
-    Compresses the oldest 50 raw turns into a single compressed block.
-    Removes original turns from history, inserts the block, saves to disk.
-    Returns the updated history.
+    Compresses the oldest raw turns (everything beyond KEEP_RECENT) into a
+    single compressed block. Removes original turns from history, inserts the
+    block, saves to disk. Returns the updated history.
     """
     turns_to_compress = get_compressible_turns(history)
 
     if not turns_to_compress:
         return history
 
-    print(f"--- Compressing {len(turns_to_compress)} turns into a memory block ---")
+    LOG.debug("compressing %d turns into a memory block", len(turns_to_compress))
 
     # Determine turn range from history indices
     indices = [i for i, e in enumerate(history) if _is_raw_turn(e)]
@@ -103,11 +106,11 @@ def compress(history: list, llm) -> list:
 
     parts = [f"[{len(turns_to_compress)} turns compressed]"]
     if first_user:
-        parts.append(f'Started with: "{_truncate(first_user["content"], 120)}"')
+        parts.append(f'Started with: "{_truncate(first_user["content"], TRUNCATE_FIRST)}"')
     if len(last_pair) == 2:
         parts.append(
-            f'Ended with user: "{_truncate(last_pair[0]["content"], 100)}" / '
-            f'Vesi: "{_truncate(last_pair[1]["content"], 100)}"'
+            f'Ended with user: "{_truncate(last_pair[0]["content"], TRUNCATE_LAST)}" / '
+            f'{AI_NAME}: "{_truncate(last_pair[1]["content"], TRUNCATE_LAST)}"'
         )
 
     summary = " ".join(parts)
@@ -117,7 +120,7 @@ def compress(history: list, llm) -> list:
         "role": "system",
         "type": "compressed_block",
         "turn_range": turn_range,
-        "content": f"MEMORY: {summary}"
+        "content": f"{MEMORY_PREFIX} {summary}"
     }
 
     # Remove the original turns from history
@@ -131,7 +134,11 @@ def compress(history: list, llm) -> list:
 
     save_memory(history)
 
-    print(f"--- Compression complete. Summary: {summary[:80]}... ---")
+    LOG.info(
+        "compressed %d turns -> block (%d kept)",
+        len(turns_to_compress), KEEP_RECENT,
+    )
+    LOG.debug("block turn_range=%s summary=%s", turn_range, summary)
     return history
 
 
@@ -140,34 +147,36 @@ def build_messages(history: list) -> list:
     Assembles the prompt to send to Llama.
     Structure: [system prompt] + [compressed blocks] + [session break] + [hot turns]
     Strips the type field from compressed blocks before sending.
-    Hot turns = last 6 raw user/assistant turns.
+    Hot turns = last HOT_TURNS raw user/assistant turns.
     """
     system_prompt = history[0]
 
-    MAX_COMPRESSED_BLOCKS = 4
     compressed_blocks = [
         _strip_type_field(e) for e in history if _is_compressed_block(e)
     ]
-    
+
     # Changed to only keep recent blocks to keep in context better
     compressed_blocks = compressed_blocks[-MAX_COMPRESSED_BLOCKS:]
 
     raw_turns = [e for e in history if _is_raw_turn(e)]
-    hot_turns = raw_turns[-6:]
+    hot_turns = raw_turns[-HOT_TURNS:]
 
     session_break = {
         "role": "system",
-        "content": (
-            "--- PAST MEMORIES END ---\n"
-            "The above are memories from previous conversations, for background reference only.\n"
-            "The CURRENT conversation starts now. Respond only to what follows."
-        )
+        "content": SESSION_BREAK_TEXT
     }
+
+    LOG.debug(
+        "assembled %d msgs: 1 sys + %d blocks + break + %d hot",
+        1 + len(compressed_blocks) + 1 + len(hot_turns),
+        len(compressed_blocks), len(hot_turns),
+    )
 
     return [system_prompt] + compressed_blocks + [session_break] + hot_turns
 
 
 def save_memory(history_data: list):
     """Saves history to memory json."""
+    MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(MEMORY_PATH, "w", encoding="utf-8") as f:
-        json.dump(history_data, f, indent=4)
+        json.dump(history_data, f, indent=JSON_INDENT)
