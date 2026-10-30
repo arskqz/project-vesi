@@ -1,12 +1,15 @@
 ![Vesi_temp](img/vesi_temp.png)
 
-> [!WARNING]
-> Ill be swapping models soon except chaos. Also tools are likely to get a purpose.
-
 # :ocean: Project Vesi
 Vesi is what happens when you give an anime personality a high-performance brain and vocal cords. It's a fully local, multimodal AI agent that can hear you, think for itself, remember conversations, and talk back **all without ever touching the cloud or relying on external APIs.**
 
 Built with Three.js, VRM, and Python. Tested on Python 3.11.14 and Windows > 10.
+
+## Status
+
+**30/10/2026**
+Im quite happy with how Vesi works now. Next things for Vesi is cleaning the repo. The Fine-Tuning and datasets are gonna be moved to a diffent repo with new pipelines for models like Qwen. I am also working on dataset management and cleaning tool and maybe making new datasets. 
+
 
 ## :rocket: Features
 
@@ -162,16 +165,6 @@ as a mapping.
 * Add passive tools (always injected) or active tools (keyword-triggered) to extend Vesi's context awareness
 
 **Frontend** — If you change `PORT`, also update `API_BASE` at the top of `client/src/app.js`.
-
-
-## 🗺️ TODO
-
-* [ X ] Memory update: Fix the memory system to better keep in context
-
-* [ ] More animations: Custom animations and multiple vrm model support.
-
-* [ ] Voice Evolution: Custom voice with Kokoro or something different.
-
 
 
 ## :mag_right: Technical Challenges & Solutions
