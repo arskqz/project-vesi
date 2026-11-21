@@ -29,7 +29,7 @@ Im quite happy with how Vesi works now. Next things for Vesi is cleaning the rep
 ### Backend
 * Python 3.11
 * FastAPI (REST API)
-* Llama-cpp-python (The Brains)
+* llama.cpp `llama-server` (The Brains — any GGUF architecture llama.cpp supports)
 * Faster-Whisper (The Hearing)
 * Kokoro-ONNX (The Vocal Cords)
 
@@ -82,6 +82,11 @@ pip install -r requirements.txt
 ### 3. Download models
 - Place your GGUF model in `models/` (e.g., `ana-v1.gguf` or `lumimaid-v2.gguf`) It is also important to choose the right quantization for your GPU.
 - Download Kokoro voices and place in `voices/`
+- Get a **CUDA build** of llama.cpp's `llama-server.exe`: either the prebuilt
+  `llama-<ver>-bin-win-cuda-*.zip` from the [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases)
+  (also unzip the matching `cudart-*.zip` next to it), or build it yourself with
+  `cmake -B build -DGGML_CUDA=ON && cmake --build build --config Release`.
+  `main.py` launches it for you; point `VESI_LLAMA_SERVER` at the exe.
 - Place your VRM **1.0** model in `client/models` 
 
 ### 4. Add your own prompt
@@ -89,8 +94,9 @@ pip install -r requirements.txt
 - Change the file name to `vesi_config.yaml`
 - Set `USER_NAME` and `AI_NAME` in `server/config/config.py`, then use `{user}` / `{ai}`
   in the prompt instead of writing names directly.
-- Point `MODEL_PATH` at your `.gguf` — either in `config.py` or via `server/.env`
-  (copy `server/.env.example`).
+- Add your `.gguf` to `MODELS` in `config.py` and pick it with `VESI_MODEL=<name>` in
+  `server/.env` (copy `server/.env.example`). The chat template is read from the GGUF,
+  so Llama 3, Qwen, Mistral etc. need no format config.
 - Feel free to play around with the mood system and change it to your liking. 
 
 ### 5. Download three.js
@@ -117,11 +123,12 @@ comment saying what it controls. The sections are:
 * **Identity** — `USER_NAME` and `AI_NAME`. Change these two and the names propagate
   everywhere: system prompt, stop tokens, role-leak filters, STT vocabulary hints,
   mood hints and memory summaries.
-* **Paths** — `MODEL_PATH` (your `.gguf`), memory log, Kokoro voice files. All anchored
+* **Paths** — memory log, Kokoro voice files. All anchored
   to `server/`, so the backend runs from any working directory.
 * **Server** — `HOST`, `PORT`, `PUBLIC_BASE_URL`, CORS origins.
-* **LLM** — `N_CTX`, `N_GPU_LAYERS` (tune for your VRAM), and the sampling params
-  (`TOP_K`, `TOP_P`, `MIN_P`, `REPEAT_PENALTY`, `MAX_TOKENS`).
+* **LLM** — the `MODELS` registry and `ACTIVE_MODEL`, the `llama-server` path and port,
+  `N_CTX`, `N_GPU_LAYERS` (tune for your VRAM, overridable per model), and the sampling
+  params (`TOP_K`, `TOP_P`, `MIN_P`, `REPEAT_PENALTY`, `MAX_TOKENS`).
 * **STT / TTS** — Whisper model size and device, Kokoro voice (`TTS_VOICE`) and language.
 * **Memory** — `COMPRESSION_THRESHOLD`, `KEEP_RECENT`, `HOT_TURNS`, `MAX_COMPRESSED_BLOCKS`.
 * **Mood** — baseline, decay rate, signal weights, the tsun/dere band boundaries, and the
@@ -131,7 +138,7 @@ comment saying what it controls. The sections are:
 **Logging** — always on, minimal by default:
 
 * `INFO` (default) — startup, one line per request, warnings and errors. Nothing else;
-  uvicorn access lines and llama-cpp perf output are silenced.
+  uvicorn access lines and llama-server output are silenced.
 * `DEBUG` — adds per-stage timings (LLM, TTS, total) and dumps the **fully assembled
   prompt** message by message, the full response, and every mood signal that matched.
   This is the fastest way to see what the model was actually given.
@@ -147,7 +154,9 @@ so old ones stick around until you delete them.
 ```
 
 **Machine-specific paths** — Copy `server/.env.example` to `server/.env` (gitignored) and
-set `VESI_MODEL_PATH` there instead of editing `config.py`.
+set `VESI_MODEL`, `VESI_MODEL_PATH` or `VESI_LLAMA_SERVER` there instead of editing `config.py`.
+If you already run a `llama-server` (or [llama-swap](https://github.com/mostlygeek/llama-swap))
+yourself, set `VESI_LLM_URL` to it and the backend uses it instead of spawning one.
 
 **Personality** — Edit `server/vesi_config.yaml` (gitignored, so your prompt stays private):
 * `system_prompt` — Vesi's full personality prompt

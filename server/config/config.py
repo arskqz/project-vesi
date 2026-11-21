@@ -38,10 +38,6 @@ def render_names(text: str) -> str:
 
 ### Paths ###
 
-MODEL_PATH = Path(os.getenv(                            # GGUF LLM weights
-    "VESI_MODEL_PATH",
-    r"D:/models/lumi_vesi_v2.0_q6k.gguf",
-))
 MEMORY_PATH = Path(os.getenv(                           # Chat history JSON
     "VESI_MEMORY_PATH",
     str(BASE_DIR.parent / "logs" / "chat_log.json"),
@@ -82,7 +78,7 @@ LOG_FILE_PREFIX = "vesi"                                    # logs/vesi_<timesta
 LOG_FORMAT = "%(asctime)s %(levelname)-5s [%(name)s] %(message)s"
 LOG_TIME_FORMAT = "%H:%M:%S"
 LOG_PREVIEW_CHARS = 80          # Chars of text shown at INFO. DEBUG logs it in full
-LOG_QUIET_THIRD_PARTY = True    # Silence uvicorn access lines + llama-cpp unless DEBUG
+LOG_QUIET_THIRD_PARTY = True    # Silence uvicorn access lines + llama-server unless DEBUG
 
 # Third-party noise follows the debug switch
 UVICORN_LOG_LEVEL = "debug" if DEBUG_MODE else "warning"
@@ -90,11 +86,50 @@ UVICORN_ACCESS_LOG = DEBUG_MODE                             # Per-request access
 
 
 ### LLM ###
+# The model runs in llama.cpp's own llama-server, which main.py spawns and
+# talks to over its OpenAI-compatible HTTP API. New model architectures then
+# only need a newer llama-server build, never a new Python wheel.
+#
+# Each model's chat template comes from its GGUF (llama-server --jinja), so
+# Llama 3, Qwen, Mistral etc. are all formatted correctly without config.
 
-CHAT_FORMAT = "chatml"      # Prompt template llama-cpp applies
-N_CTX = 12288               # Context window in tokens
-N_GPU_LAYERS = 99           # Layers offloaded to GPU. Lower this if VRAM is tight
-LLM_VERBOSE = DEBUG_MODE    # llama-cpp perf spam — follows LOG_LEVEL
+# Pick one with VESI_MODEL=<name>. Optional per-model keys override the
+# defaults below: "n_ctx", "n_gpu_layers", "extra_args" (list of CLI flags).
+MODELS = {
+    "qwen": {"path": r"D:/models/qwen_vesi_v1.0_q6_k.gguf"},
+    "lumi": {"path": r"D:/models/lumi_vesi_v2.0_q6k.gguf"},
+}
+ACTIVE_MODEL = os.getenv("VESI_MODEL", "qwen").strip()
+if ACTIVE_MODEL not in MODELS:
+    raise ValueError(f"VESI_MODEL={ACTIVE_MODEL!r} is not in MODELS: {', '.join(MODELS)}")
+MODEL_CFG = MODELS[ACTIVE_MODEL]
+
+MODEL_PATH = Path(os.getenv(                # VESI_MODEL_PATH overrides the registry path
+    "VESI_MODEL_PATH",
+    MODEL_CFG["path"],
+))
+
+LLAMA_SERVER_EXE = Path(os.getenv(          # Use a CUDA build for GPU inference
+    "VESI_LLAMA_SERVER",
+    r"D:/llama.cpp/build/bin/Release/llama-server.exe",
+))
+LLM_HOST = "127.0.0.1"                      # llama-server stays local-only
+LLM_PORT = 8081                             # Must differ from PORT
+# If something already answers here (e.g. a llama-server or llama-swap you
+# started yourself), main.py uses it instead of spawning its own.
+LLM_BASE_URL = os.getenv("VESI_LLM_URL", f"http://{LLM_HOST}:{LLM_PORT}").rstrip("/")
+LLM_START_TIMEOUT = 180                     # Seconds to wait for the model to load
+LLM_REQUEST_TIMEOUT = 120                   # Seconds per chat completion
+LLM_HEALTH_POLL = 0.5                       # Seconds between /health checks at startup
+
+N_CTX = MODEL_CFG.get("n_ctx", 12288)               # Context window in tokens
+N_GPU_LAYERS = MODEL_CFG.get("n_gpu_layers", 99)    # Layers on GPU. Lower if VRAM is tight
+LLM_EXTRA_ARGS = MODEL_CFG.get("extra_args", [])    # Extra llama-server CLI flags
+LLM_VERBOSE = DEBUG_MODE    # llama-server output into the log — follows LOG_LEVEL
+
+# Passed into the GGUF's chat template. Turns off Qwen3-style <think> blocks;
+# templates that don't use the variable ignore it.
+LLM_CHAT_TEMPLATE_KWARGS = {"enable_thinking": False}
 
 TOP_K = 40                  # Sample from the N most likely tokens
 TOP_P = 0.85                # Nucleus sampling cutoff
@@ -211,7 +246,8 @@ ROLE_LEAK_PATTERNS = _CHAT_TEMPLATE_TOKENS + [
     r"\nSystem:",
 ]
 
-# Passed to llama-cpp so generation halts before the leak happens.
+# Passed to llama-server so generation halts before the leak happens.
+# The model's own end-of-turn token is handled by the server already.
 # Only role-prefix forms of the user name — a bare name would truncate any
 # reply that simply mentions you.
 STOP_TOKENS = [

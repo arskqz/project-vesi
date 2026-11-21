@@ -13,28 +13,26 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import UploadFile, File
 from pydantic import BaseModel
-from llama_cpp import Llama
 from faster_whisper import WhisperModel
 from kokoro_onnx import Kokoro
 
 from mood_system import calculate_mood, get_temperature, get_emotion, get_tts_speed
 from memory import should_compress, compress, build_messages, save_memory
 from tools import get_passive_context, run_active_tools
+import llm_client
 
 # Every tunable lives in config/config.py 
 from config import (
     AI_NAME, USER_NAME, render_names,
-    MODEL_PATH, MEMORY_PATH, CONFIG_PATH, STATIC_DIR, KOKORO_MODEL, KOKORO_VOICES,
+    MEMORY_PATH, CONFIG_PATH, STATIC_DIR, KOKORO_MODEL, KOKORO_VOICES,
     HOST, PORT, PUBLIC_BASE_URL, STATIC_MOUNT, CORS_ORIGINS,
-    CHAT_FORMAT, N_CTX, N_GPU_LAYERS, LLM_VERBOSE,
-    TOP_K, TOP_P, MIN_P, REPEAT_PENALTY, MAX_TOKENS,
     WHISPER_MODEL_SIZE, WHISPER_DEVICE, WHISPER_COMPUTE_TYPE,
     WHISPER_BEAM_SIZE, WHISPER_LANGUAGE, WHISPER_TASK, WHISPER_INITIAL_PROMPT,
     TTS_VOICE, TTS_LANG, AUDIO_CHANNELS, AUDIO_SAMPLE_WIDTH, AUDIO_SCALE,
     AUDIO_FILENAME_PREFIX, CLEAN_OLD_AUDIO,
     JSON_INDENT, MOOD_INITIAL, MOOD_HINTS,
     USER_FACTS_HEADER, CONTEXT_HEADER,
-    ROLE_LEAK_PATTERNS, STOP_TOKENS,
+    ROLE_LEAK_PATTERNS,
     LOG_LEVEL, UVICORN_LOG_LEVEL, UVICORN_ACCESS_LOG,
 )
 from logger import setup_logging, get_logger, is_debug, preview
@@ -58,7 +56,6 @@ app.add_middleware(
 app.mount(STATIC_MOUNT, StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 ### Globals ###
-llm = None
 stt_model = None
 vocal_cord = None
 vesi_mood_score = MOOD_INITIAL
@@ -168,7 +165,7 @@ def load_memory() -> list:
 ### Model initialization ###
 def init_models():
     """Starts all the models"""
-    global llm, stt_model, vocal_cord, history
+    global stt_model, vocal_cord, history
     LOG.info("initializing %s", AI_NAME)
     # STT
     LOG.debug("whisper: %s on %s (%s)", WHISPER_MODEL_SIZE, WHISPER_DEVICE, WHISPER_COMPUTE_TYPE)
@@ -183,17 +180,8 @@ def init_models():
     LOG.debug("kokoro: voice=%s lang=%s", TTS_VOICE, TTS_LANG)
     vocal_cord = Kokoro(str(KOKORO_MODEL), str(KOKORO_VOICES))
     LOG.info("kokoro ready")
-    # LLM
-    LOG.debug("llm: %s", MODEL_PATH)
-    LOG.debug("llm: n_ctx=%d n_gpu_layers=%d chat_format=%s", N_CTX, N_GPU_LAYERS, CHAT_FORMAT)
-    llm = Llama(
-        model_path=str(MODEL_PATH),
-        chat_format=CHAT_FORMAT,
-        n_ctx=N_CTX,
-        n_gpu_layers=N_GPU_LAYERS,
-        verbose=LLM_VERBOSE,
-    )
-    LOG.info("llm ready")
+    # LLM — runs in llama-server, see llm_client.py
+    llm_client.start_server()
     history = load_memory()
     LOG.info("%s is online at %s", AI_NAME, PUBLIC_BASE_URL)
 
@@ -311,25 +299,13 @@ async def chat(request: ChatRequest):
     ### LLM
     # Sampling parameters and stop tokens all come from config/config.py
     llm_started = time.perf_counter()
-    completion = llm.create_chat_completion(
-        messages=messages_to_send,
-        temperature=current_temp,
-        top_k=TOP_K,
-        top_p=TOP_P,
-        min_p=MIN_P,
-        repeat_penalty=REPEAT_PENALTY,
-        max_tokens=MAX_TOKENS,
-        stop=STOP_TOKENS,
-    )
-
+    raw_response, finish_reason = await llm_client.chat(messages_to_send, current_temp)
     llm_ms = _ms(llm_started)
 
-    choice = completion["choices"][0]
-    raw_response = choice["message"]["content"]
     full_response = clean_response(raw_response)
 
     CHAT.debug("llm %dms | finish_reason=%s | raw %d -> clean %d chars",
-               llm_ms, choice.get("finish_reason"), len(raw_response), len(full_response))
+               llm_ms, finish_reason, len(raw_response), len(full_response))
     CHAT.debug("response: %s", full_response)
 
     vesi_mood_score = calculate_mood(full_response, user_input, vesi_mood_score)
@@ -382,11 +358,11 @@ async def chat(request: ChatRequest):
     }
 
 @app.on_event("shutdown")
-def shutdown_models():
-    global llm, stt_model
+async def shutdown_models():
+    global stt_model
     LOG.info("shutting down")
-    if llm is not None:
-        llm.close()
+    await llm_client.close_client()
+    llm_client.stop_server()
     if stt_model is not None:
         del stt_model
 
